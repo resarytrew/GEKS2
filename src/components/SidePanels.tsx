@@ -7,6 +7,7 @@ import OrderPlanningPanel from "@/components/OrderPlanningPanel";
 import ExecutionPanel from "@/components/ExecutionPanel";
 import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
 import { SupplyMark } from "@/components/SupplyMark";
+import type { OperationalTab } from "@/lib/operationalSheet";
 import {
   COMMAND_LABEL,
   ECHELON_LABEL,
@@ -21,7 +22,7 @@ export default function SidePanels() {
   const selectedHexId = useGame((s) => s.selectedHexId);
   const selectedUnitIds = useGame((s) => s.selectedUnitIds);
   const toggle = useGame((s) => s.toggleUnitInSelection);
-  const [tab, setTab] = useState<"inspect" | "orders" | "situation">("inspect");
+  const [tab, setTab] = useState<OperationalTab>("inspect");
   if (!state) return null;
   const hex = selectedHexId ? state.hexes[selectedHexId] : null;
   const stack = hex ? unitsAt(state, selectedHexId!) : [];

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/components/Icon";
 import SidePanels from "@/components/SidePanels";
+import { getMobileSheetView, type MobileSheetState } from "@/lib/operationalSheet";
 
 interface OperationalSheetProps {
   selectedHexId: string | null;
@@ -12,8 +13,8 @@ interface OperationalSheetProps {
 /** Responsive host for the shared inspect/orders/situation sheet. */
 export default function OperationalSheet({ selectedHexId, hasSelectedUnits }: OperationalSheetProps) {
   const [desktopOpen, setDesktopOpen] = useState(true);
-  const [mobileState, setMobileState] = useState<"collapsed" | "peek" | "full">("collapsed");
-  const mobileView = mobileState === "collapsed" && (selectedHexId || hasSelectedUnits) ? "peek" : mobileState;
+  const [mobileState, setMobileState] = useState<MobileSheetState>("collapsed");
+  const mobileView = getMobileSheetView(mobileState, Boolean(selectedHexId || hasSelectedUnits));
 
   return <>
     <aside className={`field-sheet relative hidden shrink-0 border-l-2 border-[#77715e] transition-[width] duration-200 md:block ${desktopOpen ? "w-[340px]" : "w-11"}`}>
