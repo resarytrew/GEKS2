@@ -11,6 +11,7 @@ import CombatPanel from "@/components/CombatPanel";
 import Modals from "@/components/Modals";
 import Toasts from "@/components/Toasts";
 import { Icon } from "@/components/Icon";
+import ToolRail from "@/components/ToolRail";
 import { SIDE_SHORT } from "@/lib/labels";
 import type { Side } from "@/engine/types";
 
@@ -78,15 +79,16 @@ export default function PlayPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-staff-bg">
       <TopBar />
       <div className="relative flex min-h-0 flex-1">
-        <nav aria-label="Инструменты карты" className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-[#8f8978] bg-[#ebe1c9] py-2">
-          <ToolButton title="Справка" onClick={() => setPanel("help")}><Icon name="help" className="h-4 w-4" /></ToolButton>
-          <ToolButton title="Оперативные цели" onClick={() => setPanel("objectives")}><Icon name="target" className="h-4 w-4" /></ToolButton>
-          <ToolButton title="Журнал штаба" onClick={() => setPanel("log")}><Icon name="journal" className="h-4 w-4" /></ToolButton>
-          <ToolButton title="Зоны контроля" active={showZOC} onClick={() => setShowZOC((v) => !v)}><Icon name="layers" className="h-4 w-4" /></ToolButton>
-          <ToolButton title="Сохранить партию" onClick={onSave}>{saving ? <span className="text-xs">…</span> : <Icon name="save" className="h-4 w-4" />}</ToolButton>
-          <div className="mt-auto" />
-          <ToolButton title="Оперативная сводка" onClick={() => setPanel("report")}><Icon name="report" className="h-4 w-4" /></ToolButton>
-        </nav>
+        <ToolRail
+          showZOC={showZOC}
+          saving={saving}
+          onHelp={() => setPanel("help")}
+          onObjectives={() => setPanel("objectives")}
+          onLog={() => setPanel("log")}
+          onReport={() => setPanel("report")}
+          onToggleZOC={() => setShowZOC((value) => !value)}
+          onSave={() => void onSave()}
+        />
 
         <main className="relative min-w-0 flex-1">
           <GameMap
@@ -117,10 +119,10 @@ export default function PlayPage() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-staff-void/95 p-6">
           <div className="max-w-md border border-staff-edge bg-staff-panel p-8 text-center shadow-2xl">
             <div className="text-xs uppercase tracking-[0.25em] text-staff-gold">
-              Передача устройства
+              План запечатан
             </div>
             <h2 className="mt-4 font-dispatch text-2xl text-staff-ink">
-              План первой стороны скрыт
+              Передайте управление следующей стороне
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-staff-mute">
               Передайте устройство игроку стороны «{SIDE_SHORT[state.activeSide]}».
@@ -130,7 +132,7 @@ export default function PlayPage() {
               className="mt-6 border border-staff-gold bg-staff-gold px-5 py-2 text-sm font-semibold text-staff-void"
               onClick={() => setHandoffAcknowledgedFor(state.activeSide)}
             >
-              Устройство передано
+              Продолжить за {SIDE_SHORT[state.activeSide]}
             </button>
           </div>
         </div>
@@ -139,26 +141,3 @@ export default function PlayPage() {
   );
 }
 
-function ToolButton({
-  children,
-  title,
-  onClick,
-  active,
-}: {
-  children: React.ReactNode;
-  title: string;
-  onClick: () => void;
-  active?: boolean;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className={`relative flex h-9 w-9 items-center justify-center border-l-2 text-sm transition ${
-        active ? "border-staff-gold bg-[#d7c28b] text-staff-ink" : "border-transparent text-staff-ink-dim hover:border-[#77715e] hover:bg-[#ded2b5] hover:text-staff-ink"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
