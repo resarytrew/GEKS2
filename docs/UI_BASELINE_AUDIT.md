@@ -3,6 +3,8 @@
 - **Baseline commit:** `75d556dbd888491e1ccf2b6e7d3512795d532377`
 - **Working branch:** `arena/019faf17-geks2` (Arena session branch; the requested branch cannot be created in this workspace).
 - **Scope:** presentation only. Engine remains authoritative for movement, combat, supply, score, contacts and WEGO execution.
+- **Environment:** Node `v22.22.3`, npm `10.9.8`.
+- **Verification:** `typecheck`, `lint`, 95 engine tests and production `build` passed after the installed dependency resolution. `npm ci` is currently blocked before execution because `package-lock.json` omits `esbuild@0.28.1` optional package entries required by the present dependency graph; this pre-existing lockfile mismatch is not changed by UI work.
 
 ## Existing surfaces
 
@@ -26,6 +28,18 @@ At 1280×720 the original persistent 340px inspector plus 128px card bar left th
 ## Data actually available to UI
 
 `GameState` supplies phase, active/initiative side, date/turn/impulse, plans and orders, reactions, contacts, cards, objectives, scores, weather, supply state per unit, HQ command points, event log, combat resolution and save status. `predictCombat` is an existing engine rules adapter. There is **no** DailyAfterActionReport, battle modifier itemisation, source-verified operational-area data, card artwork, command reliability percentage, supply path explanation, presentation mode or mobile-specific state.
+
+## WEGO capability verification
+
+| Capability | In types | Executes in engine | Available to current UI |
+|---|---|---|---|
+| March order | yes | yes | yes — map creates `march` orders |
+| Prepared attack | yes | not exposed by current map workflow | shown only if engine state contains it |
+| Defence / withdrawal / reserve | yes | no UI creation path verified | shown only if engine state contains it |
+| Contacts | yes (`ContactState`) | yes during execution | no detailed presentation yet |
+| Combat report | yes (`CombatResolution`) | yes | yes — strength, odds and result |
+| Daily report | no dedicated type | no | only existing morning summary |
+| Execution total | no | no `executionImpulses` field | current impulse only; no fake total |
 
 ## Accessibility baseline
 

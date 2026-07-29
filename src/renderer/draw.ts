@@ -34,6 +34,13 @@ export interface RenderUI {
   activeSide: Side;
 }
 
+/** Single source of truth for visual detail thresholds. */
+export const MAP_LOD = {
+  far: 0.5,
+  medium: 0.7,
+  close: 0.95,
+} as const;
+
 const C = {
   paper: "#d9d0b8",
   clear: "#dbd1b7",
@@ -464,11 +471,17 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
     ctx.stroke();
   }
 
-  // HQ stripe
+  // Headquarters have a flag plus a double command rule: readable without colour.
   const isHq = u.echelon === "corps_hq" || u.echelon === "army_hq" || u.echelon === "front_hq";
   if (isHq) {
-    ctx.fillStyle = accent;
-    ctx.fillRect(x0, y0, w, 2.4);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0 + 1, y0 + 2.5);
+    ctx.lineTo(x0 + w - 1, y0 + 2.5);
+    ctx.moveTo(x0 + 1, y0 + 5);
+    ctx.lineTo(x0 + w - 1, y0 + 5);
+    ctx.stroke();
   }
 
   ctx.textAlign = "center";
@@ -498,14 +511,22 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
     ctx.fill();
   }
 
-  // Supply dot (top-right)
-  const supColor: Record<string, string> = { full: "#7bbf6a", limited: "#d8c24a", low: "#e0a13b", isolated: "#cf5b3a", none: "#9c2f24" };
-  if (size > 22) {
-    ctx.beginPath();
-    ctx.arc(x0 + w - 3, y0 + 3, pipR + 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = supColor[u.supplyState] ?? "#888";
-    ctx.fill();
-  }
+  // Supply is a shape as well as a colour: circle / half circle / triangle / slash / cross.
+  if (size > 22) drawSupplyMark(ctx, u.supplyState, x0 + w - 5, y0 + 5, Math.max(2.5, pipR + 1));
+}
+
+function drawSupplyMark(ctx: CanvasRenderingContext2D, state: UnitState["supplyState"], x: number, y: number, r: number): void {
+  const colors: Record<UnitState["supplyState"], string> = { full: "#5f7d54", limited: "#b59035", low: "#b85b31", isolated: "#a74032", none: "#54251f" };
+  ctx.save();
+  ctx.strokeStyle = colors[state];
+  ctx.fillStyle = colors[state];
+  ctx.lineWidth = 1.3;
+  if (state === "full") { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  else if (state === "limited") { ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.lineTo(x + r, y); ctx.closePath(); ctx.fill(); }
+  else if (state === "low") { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r); ctx.lineTo(x - r, y + r); ctx.closePath(); ctx.fill(); }
+  else if (state === "isolated") { ctx.beginPath(); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r); ctx.stroke(); }
+  ctx.restore();
 }
 
 function drawSymbol(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: number, size: number, color: string, accent: string): void {
