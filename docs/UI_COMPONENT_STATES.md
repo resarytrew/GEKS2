@@ -1,26 +1,20 @@
-# UI component states
+# UI component states — WEGO v0.4
 
 ## Operational sheet
 
-- **Collapsed:** a 44px tab remains; the map receives the released width.
-- **Inspect:** no selection shows phase guidance; a hex shows only factual hex data; a unit adds the factual unit passport.
-- **Orders:** shows only `GameState.plans[activeSide].orders`; opposite-side orders are never read.
-- **Situation:** entry points to factual objectives and event log, not a fabricated intelligence summary.
+- **collapsed:** 44px vertical reveal tab; map receives released width.
+- **inspect:** empty, hex, stack, or unit passport.
+- **orders:** `OrderPlanningPanel` is rendered only in planning, followed by active-side `PlannedOrder` list.
+- **situation:** `ExecutionPanel` is rendered during execution/after-action and factual objectives remain available.
 
-## Phase rail
+## Shared order statuses
 
-- **Planning:** displays draft count and committed marker from `SidePlan`.
-- **Plans locked / execution:** displays engine `impulse`; it does not claim a time-of-day or contact count beyond `contacts`.
-- **Other phases:** displays label/hint from existing labels and one engine command action.
+`draft`, `committed`, `executing`, `delayed`, `blocked` (when exposed by engine), `failed`, `completed`, `cancelled`. Presentation must use a label, shape/line state and colour; it must not rely on raw values alone.
 
-## Cards tray
+## Phase and controls
 
-- closed / open / no cards / unavailable date / target required / playable. It is not persistent and does not assert an action is valid until engine validation succeeds.
+Phase items use `completed`, `current`, `upcoming`, `locked` and `unavailable`. Icon-only controls have an accessible name on their button; SVGs are decorative. A modal closes before `Esc` clears a map selection.
 
-## Combat sheet
+## Canvas entities
 
-- hidden / candidate selection / engine-rule preview / engine-result report. The preview shows strength, odds and engine outcome only; it must not display a fictitious modifier breakdown.
-
-## Handoff
-
-- only after one plan is committed; sealed screen hides map and identifies the receiving side. It is local UI acknowledgement, while plan secrecy is guaranteed by `drawStaticLayer` reading only active-side orders.
+Counters have far/medium/close LOD via `MAP_LOD`, selected/hovered/reachable/attack-target states, HQ double command rule, and supply circle/half-circle/triangle/slash/cross marks. Stack display is limited to three counters plus a count marker.

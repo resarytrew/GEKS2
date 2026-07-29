@@ -1,51 +1,26 @@
-# UI baseline audit — before UI v1.0
+# UI baseline audit — WEGO v0.4 integration
 
-- **UI v1.0 visual baseline commit:** `75d556dbd888491e1ccf2b6e7d3512795d532377`.
-- **Current extension baseline (before counter semantics stage):** `f34828b`.
-- **Working branch:** `arena/019faf17-geks2` (Arena session branch; the requested branch cannot be created in this workspace).
-- **Scope:** presentation only. Engine remains authoritative for movement, combat, supply, score, contacts and WEGO execution.
-- **Environment:** Node `v22.22.3`, npm `10.9.8`.
-- **Verification:** `typecheck`, `lint`, 95 engine tests and production `build` passed after the installed dependency resolution. `npm ci` is currently blocked before execution because `package-lock.json` omits `esbuild@0.28.1` optional package entries required by the present dependency graph; this pre-existing lockfile mismatch is not changed by UI work.
+## Repository baseline
 
-## Existing surfaces
+- **Current main integrated:** `4e6d0ca`.
+- **UI source only:** `bcdb7e5130875a25c2246c37a9c2b490715db1e2`.
+- **Shared merge base:** `91040c168e021d56d870cb2cca00b48669591f32`.
+- **Runtime:** Node `v22.22.3`, npm `10.9.8`.
+- **Authoritative version tuple:** schema 4, engine 0.4.0, scenario 0.4.0.
+- **Checks after integration:** typecheck/lint/build pass; 9 test files and 182 tests pass. The old v0.3 `npm ci` lock mismatch was not imported; clean v0.4 lockfile validation remains CI work.
 
-| Surface | Existing implementation | Decision |
-|---|---|---|
-| Scenario menu | `src/app/page.tsx` | keep data flow; rebuild as dossier/table |
-| Play shell | `src/app/play/page.tsx` | keep map wiring/handoff; rebuild rails, sheet and responsive states |
-| Map | `GameMap` + Canvas `renderer/draw.ts` | retain Canvas 2D/offscreen static layer; revise symbols, LOD and map controls |
-| Status bar | `TopBar` | rebuilt as command rail |
-| Cards / phase controls | `BottomBar` | rebuilt as phase rail + on-demand tray |
-| Inspector | `SidePanels` | retain factual hex/unit data; rebuild as tabbed operational sheet |
-| Combat | `CombatPanel` | retain `predictCombat` / `CombatResolution`; rebuild visual report only |
-| Reports and log | `Modals` | retain real `eventLog`, scenario events and scores; restyle and remove glyph UI |
+## UI inventory
 
-## Design baseline
+Pages are scenario dossier (`/`) and play (`/play`). Main components are command rail, tool rail, `GameMap`, operational sheet, `OrderPlanningPanel`, `ExecutionPanel`, cards tray, combat sheet, reports/modals and toasts. The renderer uses Canvas 2D with a cached static geography canvas and a dynamic canvas.
 
-Legacy aliases (`staff-*`) are still in use while migration proceeds. The previous UI used dark surfaces, a high card density, repeated rounded corners and Unicode/emoji controls. The current first migration introduced paper/ink surfaces and local SVG controls, but still had Unicode glyphs in reports, map controls and content states.
+## Available v0.4 UI data
 
-At 1280×720 the original persistent 340px inspector plus 128px card bar left the map visually constrained. At 1440×900 it was usable but panels had equal visual weight to the map. The original mobile layout hid the inspector entirely and lacked a contextual sheet. The Canvas map itself used all remaining space, but there was no explicit map-area contract or semantic controls.
+The engine exposes plans for both sides, ten planned order types, planned reactions, six authoritative impulse labels, impulse reports, contacts, combat model/resolution, temporary command effects, supply states, cards, objectives, scores, save migration and `DailyAfterActionReport`. The engine’s sanitised state controls hidden information. Details and fallbacks are in `UI_STATE_CONTRACT.md`.
 
-## Data actually available to UI
+## Visual migration findings
 
-`GameState` supplies phase, active/initiative side, date/turn/impulse, plans and orders, reactions, contacts, cards, objectives, scores, weather, supply state per unit, HQ command points, event log, combat resolution and save status. `predictCombat` is an existing engine rules adapter. There is **no** DailyAfterActionReport, battle modifier itemisation, source-verified operational-area data, card artwork, command reliability percentage, supply path explanation, presentation mode or mobile-specific state.
+The legacy v0.3 shell was a dense dark dashboard with repeated rounded cards, emoji controls and a permanent tall card bar. The integrated shell uses paper surfaces, dark rails, restrained ochre, local SVG controls, tabular numbers, serif historical labels and a non-persistent card tray. At 1280×720 the expanded 340px sheet remains dense; collapsing it restores map width. Exact geometry is in `UI_LAYOUT_MEASUREMENTS.md`.
 
-## WEGO capability verification
+## Preserve and rework
 
-| Capability | In types | Executes in engine | Available to current UI |
-|---|---|---|---|
-| March order | yes | yes | yes — map creates `march` orders |
-| Prepared attack | yes | not exposed by current map workflow | shown only if engine state contains it |
-| Defence / withdrawal / reserve | yes | no UI creation path verified | shown only if engine state contains it |
-| Contacts | yes (`ContactState`) | yes during execution | no detailed presentation yet |
-| Combat report | yes (`CombatResolution`) | yes | yes — strength, odds and result |
-| Daily report | no dedicated type | no | only existing morning summary |
-| Execution total | no | no `executionImpulses` field | current impulse only; no fake total |
-
-## Accessibility baseline
-
-Keyboard access exists for native buttons but focus treatment was not deliberately designed. Canvas controls had small targets and Unicode labels. State frequently depended on colour. `prefers-reduced-motion` was absent before the first migration. No component/browser UI test or screenshot suite exists.
-
-## Preserve / rework
-
-Preserve deterministic store/engine boundary, save flow, Canvas/offscreen cache, pointer pan/zoom and game-state-derived reports. Rework all visual shell components, inspector information hierarchy, cards tray, map controls, canvas counter vocabulary and modal presentation. Do not invent unavailable reports, directives, command causes or combat modifiers.
+Preserve v0.4 engine/store/types, planner, execution, AAR, test fixture, replay, persistence and sanitisation. Rework only presentation: styling, panel composition, Canvas counter language and user-facing labels. Browser acceptance tests, mobile contextual sheet, projector redaction and continuous river geometry remain separate work items rather than simulated features.

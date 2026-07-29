@@ -1,17 +1,15 @@
-# UI functionality blocked by engine data
+# UI features still blocked by authoritative data
 
-The following capabilities are intentionally not rendered as working production controls in UI v1.0 because v0.3 does not expose the required authoritative data.
+WEGO v0.4 **does** provide the planner, six authoritative impulse labels/reports, `DailyAfterActionReport`, contacts, reactions and replay. They are not listed as blockers.
 
-| Requested surface | Blocking fact in current code | Safe current UI behaviour |
+| Requested UI feature | Missing authoritative contract | Current safe behaviour |
 |---|---|---|
-| Execution total / progress percentage | `GameState` has only `impulse`, with no `executionImpulses` collection or maximum | display current impulse only when execution is active; do not invent a denominator |
-| Daily After Action Report | there is no `DailyAfterActionReport` type or reducer output | existing morning report uses only current state and scenario events |
-| Combat modifier list | `predictCombat` returns strengths, odds, expected outcome and a penetration flag, not itemised modifiers | display factual strengths/odds/outcome; no fictional breakdown |
-| Supply explanation/path | only resulting `UnitState.supplyState` is exposed | display state only |
-| Directive decisions | cards/events do not expose document/choice model beyond `CardDefinition` | no directive decision sheet |
-| Presentation permissions | `mode` has no `presentation` policy or redaction selector | no projector control that could leak information |
-| Operational areas | no `OperationalArea` scenario data exists | no map layer |
-| Full planner fields | only `march` is created by current map interaction although `PlannedOrderType` enumerates more types | Orders sheet shows all existing engine orders but creates no unsupported types |
-| Structured log links | many `GameEvent` variants lack a common hex/unit/time envelope | log remains text-only and does not pretend it can center every event |
+| Projector / presentation mode | no dedicated redacted presentation state or permission policy | no production switch that could reveal plans/cards |
+| Operational-area map overlay | no `OperationalArea` scenario model | no decorative area overlay |
+| Rich directive sheet and decisions | no document/decision model with supported commands | cards remain engine-backed cards only |
+| Map-centering event log | `GameEvent` has no universal hex/unit/time link | log stays textual; no false navigation |
+| Full causal supply explanation | state exposes outcome, not explanation/path | displays state and shape only |
+| Continuous river geometry | source map still describes river edges, not hydrological polylines | no claim of archive-accurate continuous rivers |
+| Browser acceptance screenshots | Playwright configuration and deterministic browser fixture are absent | no acceptance screenshots are claimed |
 
-The UI still reads the real `plans`, `contacts`, `lastCombat`, `eventLog`, cards, objectives, scores and supply states. Any future engine addition should be exposed through a read-only presentation selector before an interactive UI control is introduced.
+Future engine additions must arrive through a read-only presentation selector before an interactive UI control is added.
