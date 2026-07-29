@@ -2,6 +2,10 @@
 
 import { useGame } from "@/store/gameStore";
 import { IMPULSE_LABELS } from "@/engine/wego";
+import {
+  ORDER_STATUS_LABELS,
+  ORDER_TYPE_LABELS,
+} from "@/engine/presentation";
 
 export default function ExecutionPanel() {
   const state = useGame((store) => store.state);
@@ -66,9 +70,11 @@ export default function ExecutionPanel() {
               }`}
             />
             <span className="min-w-0 flex-1 truncate text-staff-ink-dim">
-              {order.orderType} · {order.entityIds.length}
+              {ORDER_TYPE_LABELS[order.orderType]} · {order.entityIds.length}
             </span>
-            <span className="text-staff-mute">{order.status}</span>
+            <span className="text-staff-mute">
+              {ORDER_STATUS_LABELS[order.status]}
+            </span>
           </div>
         ))}
       </div>
