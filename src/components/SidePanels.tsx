@@ -6,10 +6,10 @@ import { COMMANDERS, SOURCES } from "@/scenarios/baltic-1941/scenario";
 import OrderPlanningPanel from "@/components/OrderPlanningPanel";
 import ExecutionPanel from "@/components/ExecutionPanel";
 import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
+import { SupplyMark } from "@/components/SupplyMark";
 import {
   COMMAND_LABEL,
   ECHELON_LABEL,
-  SUPPLY_COLOR,
   SUPPLY_LABEL,
   TERRAIN_LABEL,
   UNIT_TYPE_LABEL,
@@ -203,7 +203,7 @@ function UnitInspector({ unit }: { unit: UnitState }) {
         <div>
           <span className="text-[9px] uppercase tracking-wider text-staff-mute">Снабжение</span>
           <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: SUPPLY_COLOR[unit.supplyState] }} />
+            <SupplyMark state={unit.supplyState} className="h-3.5 w-3.5" />
             <span className="text-staff-ink-dim">{SUPPLY_LABEL[unit.supplyState]}</span>
           </div>
         </div>
