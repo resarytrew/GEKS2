@@ -1,6 +1,7 @@
 # UI baseline audit — before UI v1.0
 
-- **Baseline commit:** `75d556dbd888491e1ccf2b6e7d3512795d532377`
+- **UI v1.0 visual baseline commit:** `75d556dbd888491e1ccf2b6e7d3512795d532377`.
+- **Current extension baseline (before counter semantics stage):** `f34828b`.
 - **Working branch:** `arena/019faf17-geks2` (Arena session branch; the requested branch cannot be created in this workspace).
 - **Scope:** presentation only. Engine remains authoritative for movement, combat, supply, score, contacts and WEGO execution.
 - **Environment:** Node `v22.22.3`, npm `10.9.8`.
