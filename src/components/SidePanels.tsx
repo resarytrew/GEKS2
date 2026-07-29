@@ -5,6 +5,7 @@ import { useGame, unitsAt } from "@/store/gameStore";
 import { COMMANDERS, SOURCES } from "@/scenarios/baltic-1941/scenario";
 import OrderPlanningPanel from "@/components/OrderPlanningPanel";
 import ExecutionPanel from "@/components/ExecutionPanel";
+import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
 import {
   COMMAND_LABEL,
   ECHELON_LABEL,
@@ -76,7 +77,7 @@ function OrdersSheet() {
   const state = useGame((s) => s.state)!;
   const remove = useGame((s) => s.dispatch);
   const orders = state.plans[state.activeSide].orders;
-  return <div className="staff-scroll h-full overflow-y-auto p-3"><div className="sheet-title pb-2 font-dispatch text-lg">Приказы · {state.activeSide === "germany" ? "Германия" : "СССР"}</div><OrderPlanningPanel /><p className="mt-2 text-[11px] leading-relaxed text-staff-ink-dim">{orders.length ? "Статус приказов берётся из плана движка." : "Черновиков нет. Выберите свои соединения и укажите достижимый гекс на карте."}</p><div className="mt-3 space-y-2">{orders.map((order) => <article key={order.id} className="border-l-2 border-staff-gold bg-staff-panel2/50 p-2"><div className="flex items-start justify-between gap-2"><div><b className="text-[11px] text-staff-ink">{orderLabel(order.orderType)}</b><div className="mt-1 text-[10px] text-staff-ink-dim">{order.entityIds.map((id) => state.units[id]?.shortName ?? id).join(", ")}</div></div><span className="text-[9px] uppercase tracking-wide text-staff-mute">{order.status}</span></div>{order.delayReasons?.length ? <p className="mt-1 text-[10px] text-staff-mute">{order.delayReasons.join("; ")}</p> : null}{order.status === "draft" && <button onClick={() => remove({ type: "REMOVE_PLANNED_ORDER", side: state.activeSide, plannedOrderId: order.id })} className="mt-2 border border-staff-edge px-2 py-1 text-[9px] uppercase tracking-wide text-staff-ink-dim hover:border-staff-edge2">Отменить черновик</button>}</article>)}</div></div>;
+  return <div className="staff-scroll h-full overflow-y-auto p-3"><div className="sheet-title pb-2 font-dispatch text-lg">Приказы · {state.activeSide === "germany" ? "Германия" : "СССР"}</div><OrderPlanningPanel /><p className="mt-2 text-[11px] leading-relaxed text-staff-ink-dim">{orders.length ? "Статус приказов берётся из плана движка." : "Черновиков нет. Выберите свои соединения и укажите достижимый гекс на карте."}</p><div className="mt-3 space-y-2">{orders.map((order) => <article key={order.id} className="border-l-2 border-staff-gold bg-staff-panel2/50 p-2"><div className="flex items-start justify-between gap-2"><div><b className="text-[11px] text-staff-ink">{ORDER_TYPE_LABELS[order.orderType]}</b><div className="mt-1 text-[10px] text-staff-ink-dim">{order.entityIds.map((id) => state.units[id]?.shortName ?? id).join(", ")}</div></div><span className="text-[9px] uppercase tracking-wide text-staff-mute">{ORDER_STATUS_LABELS[order.status]}</span></div>{order.delayReasons?.length ? <p className="mt-1 text-[10px] text-staff-mute">{order.delayReasons.join("; ")}</p> : null}{order.status === "draft" && <button onClick={() => remove({ type: "REMOVE_PLANNED_ORDER", side: state.activeSide, plannedOrderId: order.id })} className="mt-2 border border-staff-edge px-2 py-1 text-[9px] uppercase tracking-wide text-staff-ink-dim hover:border-staff-edge2">Отменить черновик</button>}</article>)}</div></div>;
 }
 
 function SituationSheet() {
@@ -86,7 +87,6 @@ function SituationSheet() {
   return <div className="staff-scroll h-full overflow-y-auto p-3"><div className="sheet-title pb-2 font-dispatch text-lg">Оперативная обстановка</div><ExecutionPanel /><div className="mt-3 border-l-2 border-staff-gold pl-3"><div className="text-[9px] font-bold uppercase tracking-[.12em] text-staff-mute">Текущий этап</div><p className="mt-1 text-[11px] leading-relaxed text-staff-ink-dim">{state.phase === "planning" ? "Составьте и подтвердите приказы. Противник их не увидит." : "Следуйте указанию фазовой ленты; результаты определяются движком."}</p></div><div className="mt-4"><div className="text-[9px] font-bold uppercase tracking-[.12em] text-staff-mute">Активные цели</div>{objectives.slice(0, 3).map((objective) => <p className="mt-2 text-[11px] text-staff-ink-dim" key={objective.id}>{objective.description} <b className="tabular text-staff-ink">{objective.points}</b></p>)}</div><button onClick={() => setPanel("log")} className="mt-4 border border-staff-edge px-3 py-2 text-[10px] font-bold uppercase tracking-[.1em] text-staff-ink-dim hover:border-staff-edge2">Открыть журнал</button></div>;
 }
 
-function orderLabel(type: string): string { return ({ march: "Марш", advance: "Продвижение", prepared_attack: "Подготовленная атака", defend: "Оборона", delay: "Сдерживание", withdraw: "Отход", reserve: "Резерв", recover: "Восстановление", prepare_demolition: "Подготовка подрыва", build_pontoon: "Понтон" } as Record<string, string>)[type] ?? type; }
 
 function HexInfo() {
   const state = useGame((s) => s.state)!;

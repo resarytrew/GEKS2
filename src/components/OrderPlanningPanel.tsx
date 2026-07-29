@@ -4,25 +4,13 @@ import { useMemo, useState } from "react";
 import { useGame } from "@/store/gameStore";
 import { assessOrderReliability, IMPULSE_LABELS } from "@/engine/wego";
 import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
+import { CONTACT_POLICY_LABELS, HEX_EDGE_LABELS, LOSS_TOLERANCE_LABELS, ORDER_RELIABILITY_LABELS, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
 import type {
   PlannedOrder,
   PlannedOrderType,
   PlannedReaction,
   ReactionCondition,
 } from "@/engine/types";
-
-const ORDER_LABELS: Record<PlannedOrderType, string> = {
-  march: "Марш",
-  advance: "Наступление",
-  prepared_attack: "Подготовленная атака",
-  defend: "Оборона",
-  delay: "Сдерживание",
-  withdraw: "Организованный отход",
-  reserve: "Резерв",
-  recover: "Восстановление",
-  prepare_demolition: "Подготовить подрыв",
-  build_pontoon: "Навести понтон",
-};
 
 const ROUTE_ORDERS = new Set<PlannedOrderType>([
   "march",
@@ -167,7 +155,7 @@ export default function OrderPlanningPanel() {
                 }
                 className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1.5 text-[11px] text-staff-ink"
               >
-                {Object.entries(ORDER_LABELS).map(([value, label]) => (
+                {Object.entries(ORDER_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
@@ -203,10 +191,7 @@ export default function OrderPlanningPanel() {
                 }
                 className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
               >
-                <option value="avoid">избегать</option>
-                <option value="fix">остановиться и связать боем</option>
-                <option value="attack">атаковать</option>
-                <option value="assault">штурмовать</option>
+                {Object.entries(CONTACT_POLICY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
             <label className="text-[10px] text-staff-mute">
@@ -220,9 +205,7 @@ export default function OrderPlanningPanel() {
                 }
                 className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
               >
-                <option value="low">низкий порог</option>
-                <option value="normal">обычный</option>
-                <option value="high">высокий</option>
+                {Object.entries(LOSS_TOLERANCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
           </div>
@@ -249,15 +232,8 @@ export default function OrderPlanningPanel() {
             {(orderType === "prepare_demolition" ||
               orderType === "build_pontoon") && (
               <label className="text-[10px] text-staff-mute">
-                Ребро 0–5
-                <input
-                  type="number"
-                  min={0}
-                  max={5}
-                  value={bridgeEdge}
-                  onChange={(event) => setBridgeEdge(Number(event.target.value))}
-                  className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
-                />
+                Направление переправы
+                <select value={bridgeEdge} onChange={(event) => setBridgeEdge(Number(event.target.value))} className="mt-1 w-full border border-staff-edge bg-staff-panel px-2 py-1 text-[11px] text-staff-ink">{HEX_EDGE_LABELS.map((label, edge) => <option key={label} value={edge}>{label}</option>)}</select>
               </label>
             )}
           </div>
@@ -310,7 +286,7 @@ export default function OrderPlanningPanel() {
               {reliability && (
                 <div className="mt-0.5">
                   Надёжность:{" "}
-                  <span className="text-staff-gold">{reliability.level}</span> ·
+                  <span className="text-staff-gold">{ORDER_RELIABILITY_LABELS[reliability.level] ?? reliability.level}</span> ·
                   задержка {reliability.delay.minimum}–{reliability.delay.maximum}
                 </div>
               )}
@@ -338,10 +314,10 @@ export default function OrderPlanningPanel() {
               className="flex items-center gap-2 rounded bg-staff-void/55 px-2 py-1.5 text-[10px]"
             >
               <span className="min-w-0 flex-1 truncate text-staff-ink-dim">
-                {ORDER_LABELS[order.orderType]} · {order.entityIds.length} · I
+                {ORDER_TYPE_LABELS[order.orderType]} · {order.entityIds.length} · I
                 {order.startImpulse + 1}
               </span>
-              <span className="text-staff-mute">{order.status}</span>
+              <span className="text-staff-mute">{ORDER_STATUS_LABELS[order.status]}</span>
               {!plan.committed && (
                 <button
                   onClick={() =>

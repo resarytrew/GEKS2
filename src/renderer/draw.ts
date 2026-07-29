@@ -2,10 +2,10 @@
  * Canvas 2D renderer for the staff map. Kept entirely separate from the game
  * engine: it only READS GameState and draws it. The engine never imports this.
  *
- * Performance: every frame culls to hexes inside the viewport, so hovering or
- * selecting never iterates the whole multi-thousand-hex map. Static geography
- * is drawn into an offscreen layer that is only rebuilt when the viewport or
- * map content changes; selection / hover only repaint the dynamic layer.
+ * Performance: rendering uses a viewport-filtered set of hexes. The current
+ * filter is an honest full-map scan before filtering, not a spatial index;
+ * selection and hover then draw only the filtered set. Static geography is
+ * drawn into an offscreen layer and selection / hover repaint only dynamic UI.
  */
 
 import type { GameState, HexState, UnitState, Side } from "@/engine/types";
@@ -428,7 +428,8 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
     return;
   }
 
-  const show = units.slice(0, 4);
+  // Three physical counters remain legible; the count marker represents the rest.
+  const show = units.slice(0, 3);
   const dx = size * 0.16;
   for (let i = show.length - 1; i >= 0; i--) {
     const u = show[i];
@@ -436,11 +437,11 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
     const oy = (i - (show.length - 1) / 2) * dx;
     drawCounter(ctx, u, center.x + ox, center.y + oy, size, isSel && i === 0);
   }
-  if (units.length > 4) {
+  if (units.length > 3) {
     ctx.fillStyle = "#1a140a";
     ctx.font = `600 ${Math.round(size * 0.26)}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(`+${units.length - 4}`, center.x + size * 0.5, center.y + size * 0.5);
+    ctx.fillText(`+${units.length - 3}`, center.x + size * 0.5, center.y + size * 0.5);
   }
 }
 

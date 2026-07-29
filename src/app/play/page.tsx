@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGame } from "@/store/gameStore";
 import GameMap from "@/components/GameMap";
@@ -23,17 +23,18 @@ export default function PlayPage() {
   const attackTargetHexId = useGame((s) => s.attackTargetHexId);
   const selectHex = useGame((s) => s.selectHex);
   const setPanel = useGame((s) => s.setPanel);
+  const openPanel = useGame((s) => s.openPanel);
   const saveProgress = useGame((s) => s.saveProgress);
   const [showZOC, setShowZOC] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [handoffAcknowledgedFor, setHandoffAcknowledgedFor] = useState<Side | null>(null);
 
-  const onSave = async () => {
+  const onSave = useCallback(async () => {
     setSaving(true);
     await saveProgress();
     setSaving(false);
-  };
+  }, [saveProgress]);
 
   useEffect(() => {
     if (!state) router.replace("/");
@@ -41,19 +42,21 @@ export default function PlayPage() {
 
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.tagName === "INPUT") return;
+      const target = event.target as HTMLElement | null;
+      if (event.ctrlKey || event.metaKey || event.altKey || target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
       const key = event.key.toLowerCase();
       if (key === "m") setShowZOC((value) => !value);
       if (key === "l") setPanel("log");
       if (key === "o") setPanel("objectives");
       if (key === "s") { event.preventDefault(); void onSave(); }
-      if (key === "escape") useGame.getState().clearSelection();
+      if (key === "escape") {
+        if (openPanel) setPanel(null);
+        else useGame.getState().clearSelection();
+      }
     };
     window.addEventListener("keydown", shortcuts);
     return () => window.removeEventListener("keydown", shortcuts);
-  // onSave intentionally reads current store action; this effect only binds document shortcuts.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setPanel]);
+  }, [onSave, openPanel, setPanel]);
 
   if (!state) {
     return (
