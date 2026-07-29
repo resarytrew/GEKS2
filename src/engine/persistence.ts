@@ -2,10 +2,12 @@ import type { GameCommand, GameState, SaveGame } from "@/engine/types";
 import { replayCommands } from "@/engine/engine";
 import { createInitialState } from "@/scenarios/baltic-1941/scenario";
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_ENGINE_VERSION = "0.4.0";
+export const CURRENT_SCENARIO_VERSION = "0.4.0";
 
 export type SaveMigrationResult =
-  | { ok: true; save: SaveGame; migratedFrom?: number }
+  | { ok: true; save: SaveGame; migratedFrom?: number; warnings: string[] }
   | { ok: false; code: "INVALID_SAVE" | "UNSUPPORTED_SCHEMA"; message: string };
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -23,6 +25,26 @@ function commandsFrom(value: unknown): GameCommand[] | undefined {
     commands.push(candidate as unknown as GameCommand);
   }
   return commands;
+}
+
+function migrateCommand(command: GameCommand): GameCommand {
+  if (command.type !== "UPSERT_PLANNED_ORDER" || !command.plannedOrder) {
+    return command;
+  }
+  const order = command.plannedOrder;
+  return {
+    ...command,
+    plannedOrder: {
+      ...order,
+      priority: Number.isFinite(order.priority) ? order.priority : 1,
+      contactPolicy: order.contactPolicy ?? "attack",
+      lossTolerance: order.lossTolerance ?? "normal",
+      status: order.status ?? "draft",
+      progressIndex: order.progressIndex ?? 0,
+      movementSpentThisImpulse: order.movementSpentThisImpulse ?? 0,
+      remainingMovementBudget: order.remainingMovementBudget ?? 0,
+    },
+  };
 }
 
 export function createSaveGame(state: GameState, commands: GameCommand[]): SaveGame {
@@ -54,10 +76,11 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
     };
   }
   const legacySummary = record(value.summary);
-  const commands = commandsFrom(value.commands);
-  if (!commands) {
+  const sourceCommands = commandsFrom(value.commands);
+  if (!sourceCommands) {
     return { ok: false, code: "INVALID_SAVE", message: "Журнал команд отсутствует или повреждён." };
   }
+  const commands = sourceCommands.map(migrateCommand);
   const seed =
     typeof value.seed === "number"
       ? value.seed
@@ -76,12 +99,17 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
       message: `Сценарий ${scenarioId} не поддерживается этой сборкой.`,
     };
   }
+  const sourceVersion = schemaVersion ?? 2;
+  const warnings: string[] = [];
+  if (sourceVersion < CURRENT_SCHEMA_VERSION) {
+    warnings.push(
+      `Сохранение v${sourceVersion} перенесено в v${CURRENT_SCHEMA_VERSION}; результаты ещё не исполненных WEGO-приказов будут рассчитаны правилами v0.4.`,
+    );
+  }
   const save: SaveGame = {
     schemaVersion: CURRENT_SCHEMA_VERSION,
-    engineVersion:
-      typeof value.engineVersion === "string" ? value.engineVersion : "0.2.0",
-    scenarioVersion:
-      typeof value.scenarioVersion === "string" ? value.scenarioVersion : "0.2.0",
+    engineVersion: CURRENT_ENGINE_VERSION,
+    scenarioVersion: CURRENT_SCENARIO_VERSION,
     stateVersion: typeof value.stateVersion === "number" ? value.stateVersion : 1,
     scenarioId,
     matchId:
@@ -102,12 +130,13 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
   return {
     ok: true,
     save,
-    migratedFrom: schemaVersion ?? 2,
+    migratedFrom: sourceVersion,
+    warnings,
   };
 }
 
 export function restoreSaveGame(input: unknown):
-  | { ok: true; state: GameState; commands: GameCommand[]; migratedFrom?: number }
+  | { ok: true; state: GameState; commands: GameCommand[]; migratedFrom?: number; warnings: string[] }
   | { ok: false; code: string; message: string } {
   const migrated = migrateSaveGame(input);
   if (!migrated.ok) return migrated;
@@ -123,6 +152,7 @@ export function restoreSaveGame(input: unknown):
       state,
       commands: migrated.save.commands,
       migratedFrom: migrated.migratedFrom,
+      warnings: migrated.warnings,
     };
   } catch {
     return {

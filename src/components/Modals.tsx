@@ -46,6 +46,83 @@ function Header({ title, sub }: { title: string; sub?: string }) {
 function Report() {
   const state = useGame((s) => s.state)!;
   const dispatch = useGame((s) => s.dispatch);
+  if (state.phase === "after_action" && state.afterActionReport) {
+    const report = state.afterActionReport;
+    return (
+      <>
+        <Header
+          title={`Разбор действий · ${report.date}`}
+          sub={`Сутки ${report.turn} · шесть импульсов`}
+        />
+        <div className="staff-scroll overflow-y-auto p-5 text-sm text-staff-ink-dim">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <Mini label="Контакты" value={String(report.combats.length)} />
+            <Mini label="Уничтожено" value={String(report.destroyedUnits.length)} />
+            <Mini label="Повреждено" value={String(report.damagedUnits.length)} />
+            <Mini
+              label="Мосты"
+              value={String(report.bridgesDestroyed.length)}
+            />
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <ReportList
+              title="Бои"
+              values={report.combats.map(
+                (combat) =>
+                  `${combat.defenderHexId}: ${combat.outcome}, ${combat.odds}:1`,
+              )}
+            />
+            <ReportList
+              title="Потери"
+              values={[
+                ...report.destroyedUnits.map((id) => `${id} — уничтожен`),
+                ...report.damagedUnits.map((id) => `${id} — ослаблен`),
+              ]}
+            />
+            <ReportList
+              title="Командные сбои"
+              values={report.commandFailures}
+            />
+            <ReportList
+              title="Изменения снабжения"
+              values={report.supplyChanges}
+            />
+          </div>
+          <div className="mt-4">
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-staff-mute">
+              Ход исполнения
+            </div>
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {report.impulses.map((impulse) => (
+                <div
+                  key={impulse.impulse}
+                  className="rounded border border-staff-edge bg-staff-panel2/50 p-2"
+                >
+                  <div className="font-mono text-[10px] text-staff-gold">
+                    I{impulse.impulse + 1}
+                  </div>
+                  <div className="mt-1 text-[9px] text-staff-mute">
+                    {impulse.combatIds.length} боёв
+                  </div>
+                  <div className="text-[9px] text-staff-mute">
+                    {impulse.failedOrderIds.length} сбоев
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-staff-edge bg-staff-panel2 px-5 py-3 text-right">
+          <button
+            onClick={() => dispatch({ type: "END_PHASE" })}
+            className="rounded bg-staff-gold px-5 py-2 text-xs font-bold uppercase tracking-wider text-staff-void hover:brightness-110"
+          >
+            Следующие сутки ▶
+          </button>
+        </div>
+      </>
+    );
+  }
   const todayEvents = EVENTS.filter((e) => e.turn === state.turn);
   const gerCities = Object.values(state.hexes).filter((h) => h.settlement && h.control === "germany" && h.settlement.victoryPoints >= 3).map((h) => h.settlement!.name);
   return (
@@ -90,6 +167,25 @@ function Report() {
         </div>
       )}
     </>
+  );
+}
+
+function ReportList({ title, values }: { title: string; values: string[] }) {
+  return (
+    <section className="rounded border border-staff-edge bg-staff-panel2/40 p-3">
+      <h3 className="text-[10px] font-semibold uppercase tracking-widest text-staff-mute">
+        {title}
+      </h3>
+      {values.length === 0 ? (
+        <p className="mt-2 text-[10px] text-staff-mute">Нет событий.</p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-[10px] text-staff-ink-dim">
+          {values.slice(0, 12).map((value, index) => (
+            <li key={`${value}:${index}`}>· {value}</li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

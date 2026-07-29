@@ -1,5 +1,18 @@
 # Правила журнала изменений
 
+## v0.4
+
+- Ten planned-order types now have concrete executors.
+- Movement depends on terrain, roads, class, readiness, command, supply, fuel
+  and time of day.
+- Meeting engagements and prepared attacks resolve through shared combat rules.
+- Losses distribute across formations; ammunition, retreat and advance mutate
+  authoritative state.
+- Conditional reactions, active reserves, temporary HQ initiative, engineer
+  work and explainable supply are implemented.
+- Six impulses end in an AAR and a one-command transition to the next day.
+- Saves migrate to schema 4 with explicit warnings.
+
 Версия использует `MAJOR.MINOR.PATCH`.
 
 - `MAJOR`: несовместимая схема сохранения или принципиально новая модель.

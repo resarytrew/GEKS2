@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useGame } from "@/store/gameStore";
 import { SCENARIO } from "@/scenarios/baltic-1941/scenario";
 import { restoreSaveGame } from "@/engine/persistence";
+import { createRaseiniaiWegoTestState } from "@/scenarios/baltic-1941/wego-test";
 import {
   readLocalSaves,
   removeLocalSave,
@@ -57,6 +58,11 @@ export default function HomePage() {
 
   const startNew = () => {
     newGame({});
+    router.push("/play");
+  };
+
+  const startFixture = () => {
+    loadGame(createRaseiniaiWegoTestState(), []);
     router.push("/play");
   };
 
@@ -122,6 +128,12 @@ export default function HomePage() {
               className="border border-[#72521d] bg-staff-gold px-6 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-staff-void transition hover:brightness-110"
             >
               Начать кампанию · hot-seat
+            </button>
+            <button
+              onClick={startFixture}
+              className="rounded-lg border border-staff-gold/50 px-6 py-3 text-sm uppercase tracking-wider text-staff-gold transition hover:bg-staff-gold/10"
+            >
+              Raseiniai WEGO Test
             </button>
             <a
               href="#modes"

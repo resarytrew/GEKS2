@@ -1,5 +1,9 @@
 # Модель исполнения WEGO
 
+v0.4 completes the six-impulse execution loop. Contacts resolve into combat
+during their impulse, each impulse produces a report, and impulse six creates
+the authoritative After Action Report.
+
 ## Фазы
 
 1. `planning_germany`

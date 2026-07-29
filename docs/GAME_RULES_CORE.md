@@ -1,5 +1,9 @@
 # Правила ядра
 
+v0.4 uses fractional impulse movement, fuel and ammunition expenditure,
+multi-hex retreats, defensive posture, reserves, engineer work and one canonical
+CRT shared by legacy debug and WEGO combat.
+
 ## Масштаб и ход
 
 Один гекс представляет приблизительно 10–13 км, одна основная фишка —

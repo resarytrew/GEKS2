@@ -1,4 +1,8 @@
-# Архитектура v0.3
+# Архитектура v0.4
+
+WEGO execution is split into `order-execution.ts`, `wego-combat.ts`,
+`after-action.ts`, and `invariants.ts`. `engine.ts` remains the command boundary;
+all successful commands are checked by `validateStateInvariants`.
 
 ## Границы модулей
 
