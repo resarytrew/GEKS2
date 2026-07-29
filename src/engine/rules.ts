@@ -127,7 +127,13 @@ const classKey = (u: UnitState): "foot" | "mot" | "trk" =>
  * Cost for `unit` to cross from `fromId` to an adjacent `toId`.
  * Returns INFINITY when the move is illegal (water, no bridge, full stack...).
  */
-export function edgeCost(state: GameState, unit: UnitState, fromId: string, toId: string): number {
+export function edgeCost(
+  state: GameState,
+  unit: UnitState,
+  fromId: string,
+  toId: string,
+  options: { ignoreEnemyOccupation?: boolean } = {},
+): number {
   const from = state.hexes[fromId];
   const to = state.hexes[toId];
   if (!from || !to) return INFINITY;
@@ -135,7 +141,7 @@ export function edgeCost(state: GameState, unit: UnitState, fromId: string, toId
 
   // Enemy-occupied hex cannot be entered by movement (must attack).
   const enemyOnTo = to.stackUnitIds.some((uid) => state.units[uid]?.side === enemyOf(unit.side));
-  if (enemyOnTo) return INFINITY;
+  if (enemyOnTo && !options.ignoreEnemyOccupation) return INFINITY;
 
   const tc = TERRAIN_MOVE[to.terrain] ?? TERRAIN_MOVE.clear;
   const ck = classKey(unit);
@@ -577,6 +583,21 @@ export function effectiveHqInitiative(
       )
       .reduce((sum, effect) => sum + effect.initiativeModifier, 0)
   );
+}
+
+export function effectiveMaxCommandPoints(
+  state: GameState,
+  hq: HeadquartersState,
+): number {
+  const modifier = state.temporaryCommandEffects
+    .filter(
+      (effect) =>
+        effect.targetHqId === hq.id &&
+        effect.startsAtTurn <= state.turn &&
+        effect.expiresAfterTurn >= state.turn,
+    )
+    .reduce((sum, effect) => sum + effect.commandPointModifier, 0);
+  return Math.max(0, hq.maxCommandPoints + modifier);
 }
 
 export function recomputeCommand(state: GameState): void {

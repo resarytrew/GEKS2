@@ -143,7 +143,7 @@ describe("v0.4 full-day integration", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.save.schemaVersion).toBe(4);
+      expect(result.save.schemaVersion).toBe(5);
       expect(result.warnings.length).toBeGreaterThan(0);
       expect(
         result.save.commands[0].plannedOrder?.remainingMovementBudget,
@@ -195,8 +195,9 @@ describe("v0.4 full-day integration", () => {
 
   it("loss-threshold reaction aborts an attack when seeded losses reach it", () => {
     let observed = false;
-    for (let seed = 1; seed <= 120 && !observed; seed++) {
+    for (let seed = 1; seed <= 20 && !observed; seed++) {
       const state = createRaseiniaiWegoTestState(seed);
+      state.units["ger-1pz"].attack = 0.1;
       state.plans.germany.orders.push({
         id: "attack-with-threshold",
         side: "germany",
@@ -228,8 +229,13 @@ describe("v0.4 full-day integration", () => {
         type: "PREPARED_ATTACK" as const,
         hexId: "17_29",
         attackerSide: "germany" as const,
-        entityIds: ["ger-1pz", "sov-2td"],
-        participantIds: ["ger-1pz", "sov-2td"],
+        defenderSide: "ussr" as const,
+        attackerParticipantIds: ["ger-1pz"],
+        defenderParticipantIds: ["sov-2td"],
+        attackerSupportIds: [],
+        defenderSupportIds: [],
+        attackerReserveIds: [],
+        defenderReserveIds: [],
         impulse: 0,
         detectedBy: ["germany" as const, "ussr" as const],
         resolved: false,
@@ -240,8 +246,11 @@ describe("v0.4 full-day integration", () => {
       const resolution = resolveContact(state, contact, events);
       if ((resolution?.attackerLossSteps ?? 0) >= 1) {
         observed = true;
-        expect(state.plans.germany.reactions[0].uses).toBe(1);
+        expect(state.plans.germany.reactions[0].uses).toBe(0);
         expect(state.plans.germany.orders[0].status).toBe("failed");
+        expect(
+          events.some((event) => event.type === "ORDER_ABORTED_BY_LOSSES"),
+        ).toBe(true);
       }
     }
     expect(observed).toBe(true);

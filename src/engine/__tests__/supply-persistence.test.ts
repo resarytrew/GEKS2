@@ -171,9 +171,9 @@ describe("save migration", () => {
   it("creates a versioned v0.4 save envelope", () => {
     const state = fresh();
     const save = createSaveGame(state, [{ type: "END_PHASE" }]);
-    expect(save.schemaVersion).toBe(4);
-    expect(save.engineVersion).toBe("0.4.0");
-    expect(save.scenarioVersion).toBe("0.4.0");
+    expect(save.schemaVersion).toBe(5);
+    expect(save.engineVersion).toBe("0.4.1");
+    expect(save.scenarioVersion).toBe("0.4.1");
     expect(save.commands).toEqual([{ type: "END_PHASE" }]);
   });
 
@@ -186,7 +186,7 @@ describe("save migration", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.migratedFrom).toBe(2);
-      expect(result.save.schemaVersion).toBe(4);
+      expect(result.save.schemaVersion).toBe(5);
       expect(result.save.seed).toBe(42);
       expect(result.warnings.length).toBeGreaterThan(0);
     }

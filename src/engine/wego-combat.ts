@@ -21,9 +21,29 @@ import {
 import { keyOf, neighbor, parseKey, sharedEdge } from "@/engine/hex";
 import { rollInt } from "@/engine/rng";
 import { resolveHeadquartersLoss } from "@/engine/headquarters";
+import {
+  contactParticipantIds,
+  normalizeContactState,
+} from "@/engine/contact";
+import { eligibleSupportIds } from "@/engine/support";
 
 const enemyOf = (side: Side): Side =>
   side === "germany" ? "ussr" : "germany";
+
+export const LOSS_TOLERANCE_STEPS: Readonly<
+  Record<PlannedOrder["lossTolerance"], number>
+> = {
+  low: 1,
+  normal: 2,
+  high: 3,
+};
+
+export function shouldAbortOrderForLosses(
+  order: PlannedOrder,
+  lossSteps: number,
+): boolean {
+  return lossSteps >= LOSS_TOLERANCE_STEPS[order.lossTolerance];
+}
 
 function activeOrderFor(
   state: GameState,
@@ -302,40 +322,24 @@ function triggerLossThreshold(
 ): void {
   const attackingOrders = state.plans[side].orders.filter(
     (order) =>
-      contact.entityIds.some((entityId) => order.entityIds.includes(entityId)) &&
+      contactParticipantIds(contact, side).some((entityId) =>
+        order.entityIds.includes(entityId),
+      ) &&
       (order.orderType === "prepared_attack" ||
         order.orderType === "advance" ||
         order.orderType === "march"),
   );
   for (const order of attackingOrders) {
-    const threshold =
-      order.lossTolerance === "low"
-        ? 1
-        : order.lossTolerance === "normal"
-          ? 2
-          : 3;
-    if (lossSteps < threshold) continue;
-    const reaction = state.plans[side].reactions
-      .filter(
-        (candidate) =>
-          candidate.condition === "loss_threshold" &&
-          candidate.status === "committed" &&
-          candidate.uses < candidate.maxUses &&
-          state.impulse >= candidate.fromImpulse &&
-          state.impulse <= candidate.toImpulse,
-      )
-      .sort(
-        (left, right) =>
-          right.priority - left.priority || left.id.localeCompare(right.id),
-      )[0];
-    if (reaction) {
-      reaction.uses += 1;
-      reaction.status =
-        reaction.uses >= reaction.maxUses ? "resolved" : "committed";
-      events.push({ type: "REACTION_TRIGGERED", reactionId: reaction.id });
-    }
+    const threshold = LOSS_TOLERANCE_STEPS[order.lossTolerance];
+    if (!shouldAbortOrderForLosses(order, lossSteps)) continue;
     order.status = "failed";
     order.failureReason = "Превышен допустимый уровень потерь.";
+    events.push({
+      type: "ORDER_ABORTED_BY_LOSSES",
+      orderId: order.id,
+      lossSteps,
+      threshold,
+    });
     events.push({
       type: "ORDER_FAILED",
       orderId: order.id,
@@ -350,9 +354,18 @@ export function resolveContact(
   events: GameEvent[],
 ): CombatResolution | undefined {
   if (contact.resolved || contact.status === "resolved") return undefined;
+  Object.assign(contact, normalizeContactState(state, contact));
   contact.status = "resolving";
-  const germanUnits = combatUnits(state, contact.entityIds, "germany");
-  const sovietUnits = combatUnits(state, contact.entityIds, "ussr");
+  const germanUnits = combatUnits(
+    state,
+    contactParticipantIds(contact, "germany"),
+    "germany",
+  );
+  const sovietUnits = combatUnits(
+    state,
+    contactParticipantIds(contact, "ussr"),
+    "ussr",
+  );
   if (germanUnits.length === 0 || sovietUnits.length === 0) {
     contact.status = "cancelled";
     return undefined;
@@ -379,15 +392,30 @@ export function resolveContact(
   const defenderOrders = defenders
     .map((unit) => activeOrderFor(state, unit.id))
     .filter((order): order is PlannedOrder => !!order);
-  const supportIds = [
-    ...(contact.supportIds ?? []),
-    ...(contact.reserveIds ?? []),
-  ];
+  const attackerSupportEligible = eligibleSupportIds(
+    state,
+    attackerSide,
+    contact.hexId,
+    state.impulse,
+  );
+  const defenderSupportEligible = eligibleSupportIds(
+    state,
+    defenderSide,
+    contact.hexId,
+    state.impulse,
+  );
+  const supportIds = contact.attackerSupportIds.filter((id) =>
+    attackerSupportEligible.has(id),
+  );
+  const defenderSupportIds = contact.defenderSupportIds.filter((id) =>
+    defenderSupportEligible.has(id),
+  );
   const model = buildCombatModel(state, {
     attackerIds: attackers.map((unit) => unit.id),
     defenderIds: defenders.map((unit) => unit.id),
     defenderHexId: contact.hexId,
     supportIds,
+    defenderSupportIds,
     contactType: contact.type,
     attackerOrderTypes: attackerOrders.map((order) => order.orderType),
     defenderOrderTypes: defenderOrders.map((order) => order.orderType),
@@ -448,6 +476,30 @@ export function resolveContact(
     events,
     ammunitionSpent,
   );
+  spendAmmunition(
+    defenderSupportIds
+      .map((id) => state.units[id])
+      .filter((unit): unit is UnitState => !!unit && !unit.eliminated),
+    4,
+    events,
+    ammunitionSpent,
+  );
+  for (const unitId of [...supportIds, ...defenderSupportIds]) {
+    if (
+      !state.supportUsage.some(
+        (usage) =>
+          usage.unitId === unitId &&
+          usage.impulse === state.impulse &&
+          usage.contactId === contact.id,
+      )
+    ) {
+      state.supportUsage.push({
+        unitId,
+        impulse: state.impulse,
+        contactId: contact.id,
+      });
+    }
+  }
 
   const retreatPaths: string[][] = [];
   const retreatPathByUnit = new Map<string, string[]>();
@@ -497,6 +549,16 @@ export function resolveContact(
   const defendersRemoved = defenders.every(
     (unit) => unit.eliminated || unit.hexId !== contact.hexId,
   );
+  if (defendersRemoved) {
+    for (const hqId of [
+      ...(state.hexes[contact.hexId]?.stackUnitIds ?? []),
+    ]) {
+      const hq = state.headquarters[hqId];
+      if (hq && hq.side === defenderSide && !hq.eliminated) {
+        resolveHeadquartersLoss(state, hq.id, "captured", events);
+      }
+    }
+  }
   const canOccupyContactHex =
     defendersRemoved &&
     !!state.hexes[contact.hexId] &&
@@ -557,13 +619,6 @@ export function resolveContact(
       orderId: attackerOrders[0]?.id ?? `contact:${contact.id}`,
       reason: "Нет допустимой части для продвижения.",
     });
-  }
-
-  for (const hqId of state.hexes[contact.hexId]?.stackUnitIds ?? []) {
-    const hq = state.headquarters[hqId];
-    if (hq && hq.side === defenderSide && !hq.eliminated) {
-      resolveHeadquartersLoss(state, hq.id, "captured", events);
-    }
   }
 
   triggerLossThreshold(

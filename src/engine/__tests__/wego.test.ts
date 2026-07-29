@@ -123,7 +123,14 @@ describe("WEGO planning and secrecy", () => {
     state.contacts.push({
       id: "seen",
       hexId: german.route[1],
-      entityIds: [german.unit.id],
+      attackerSide: "germany",
+      defenderSide: "ussr",
+      attackerParticipantIds: [german.unit.id],
+      defenderParticipantIds: [],
+      attackerSupportIds: [],
+      defenderSupportIds: [],
+      attackerReserveIds: [],
+      defenderReserveIds: [],
       type: "ATTACK",
       impulse: 0,
       detectedBy: ["ussr"],
@@ -209,6 +216,7 @@ describe("WEGO impulse execution", () => {
     for (const side of ["germany", "ussr"] as Side[]) {
       state.plans[side].orders[0].actualStartImpulse = 0;
       state.plans[side].orders[0].status = "committed";
+      state.plans[side].orders[0].remainingMovementBudget = 10;
     }
     const result = applyCommand(state, { type: "EXECUTE_IMPULSE" });
     expect(result.state.contacts[0]?.type).toBe("MEETING_ENGAGEMENT");

@@ -6,6 +6,7 @@ import type {
   GameState,
   PlannedOrder,
   Side,
+  ValidatedMovementIntent,
 } from "@/engine/types";
 import {
   commandInfo,
@@ -28,11 +29,14 @@ import {
 } from "@/engine/edges";
 import {
   executePlannedOrder,
+  evaluateMovementStep,
   ORDER_COST,
   type ImpulseExecutionContext,
 } from "@/engine/order-execution";
 import { resolveContact } from "@/engine/wego-combat";
 import { buildAfterActionReport } from "@/engine/after-action";
+import { eligibleSupportIds } from "@/engine/support";
+import { allContactEntityIds } from "@/engine/contact";
 import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
 
 export const IMPULSE_LABELS = [
@@ -155,6 +159,12 @@ function validateOrder(
   if (order.entityIds.length === 0) {
     return invalid("NO_ENTITIES", "В приказе нет соединений.");
   }
+  if (new Set(order.entityIds).size !== order.entityIds.length) {
+    return invalid(
+      "DUPLICATE_ENTITIES",
+      "Одно соединение не может повторяться в приказе.",
+    );
+  }
   const plan = state.plans[side];
   const conflicting = plan.orders.find(
     (candidate) =>
@@ -203,6 +213,24 @@ function validateOrder(
       "Для движения нужен маршрут минимум из двух гексов.",
     );
   }
+  if (routeOrder) {
+    const origins = new Set(
+      order.entityIds.map((entityId) => state.units[entityId].hexId),
+    );
+    if (origins.size !== 1) {
+      return invalid(
+        "ORDER_UNITS_NOT_COLOCATED",
+        "Все соединения одного маршрутного приказа должны находиться в одном исходном гексе.",
+      );
+    }
+    const origin = state.units[order.entityIds[0]].hexId;
+    if (order.route?.[0] !== origin) {
+      return invalid(
+        "INVALID_ROUTE_ORIGIN",
+        "Маршрут должен начинаться в общем текущем гексе всех частей.",
+      );
+    }
+  }
   if (
     order.route &&
     order.route[0] !== state.units[order.entityIds[0]].hexId
@@ -213,6 +241,12 @@ function validateOrder(
     );
   }
   if (order.route) {
+    if (new Set(order.route).size !== order.route.length) {
+      return invalid(
+        "ROUTE_CYCLE",
+        "Маршрут не должен содержать повторяющиеся гексы.",
+      );
+    }
     for (let index = 1; index < order.route.length; index++) {
       if (
         !state.hexes[order.route[index]] ||
@@ -228,11 +262,51 @@ function validateOrder(
       }
     }
   }
+  if (order.fallbackRoute) {
+    const origin = state.units[order.entityIds[0]].hexId;
+    if (
+      order.fallbackRoute[0] !== origin ||
+      new Set(order.fallbackRoute).size !== order.fallbackRoute.length
+    ) {
+      return invalid(
+        "INVALID_FALLBACK_ROUTE",
+        "Запасной маршрут должен начинаться в гексе части и не содержать циклов.",
+      );
+    }
+    for (let index = 1; index < order.fallbackRoute.length; index++) {
+      if (
+        !state.hexes[order.fallbackRoute[index]] ||
+        sharedEdge(
+          parseKey(order.fallbackRoute[index - 1]),
+          parseKey(order.fallbackRoute[index]),
+        ) == null
+      ) {
+        return invalid(
+          "INVALID_FALLBACK_ROUTE",
+          "Запасной маршрут содержит несмежный или отсутствующий гекс.",
+        );
+      }
+    }
+  }
   if (order.orderType === "prepared_attack") {
     if (!order.targetHexId || !state.hexes[order.targetHexId]) {
       return invalid(
         "INVALID_ATTACK_TARGET",
         "Подготовленной атаке нужен целевой гекс.",
+      );
+    }
+    if (
+      order.entityIds.some(
+        (id) =>
+          sharedEdge(
+            parseKey(state.units[id].hexId),
+            parseKey(order.targetHexId!),
+          ) == null,
+      )
+    ) {
+      return invalid(
+        "ATTACKER_NOT_ADJACENT",
+        "Основные атакующие должны находиться рядом с целью.",
       );
     }
     if (
@@ -243,6 +317,59 @@ function validateOrder(
       return invalid(
         "AMMUNITION_CRITICAL",
         "Критически низкие боеприпасы запрещают подготовленную атаку.",
+      );
+    }
+  }
+  if ((order.supportIds?.length ?? 0) > 0) {
+    if (order.supportIds!.some((id) => order.entityIds.includes(id))) {
+      return invalid(
+        "SUPPORT_DUPLICATES_PARTICIPANT",
+        "Участник боя не может одновременно быть поддержкой.",
+      );
+    }
+    const targetHexId =
+      order.targetHexId ?? order.route?.[order.route.length - 1];
+    if (!targetHexId) {
+      return invalid(
+        "INVALID_SUPPORT_TARGET",
+        "Для поддержки требуется целевой гекс.",
+      );
+    }
+    const eligible = eligibleSupportIds(
+      state,
+      side,
+      targetHexId,
+      state.impulse,
+    );
+    if (order.supportIds!.some((id) => !eligible.has(id))) {
+      return invalid(
+        "INVALID_SUPPORT",
+        "Поддержка недоступна, находится вне дальности или уже использована.",
+      );
+    }
+  }
+  if (order.orderType === "reserve") {
+    const data = order.reserveData;
+    const supported = new Set(["friendly_contact", "enemy_breakthrough"]);
+    if (
+      !data ||
+      data.triggerConditions.length === 0 ||
+      data.triggerConditions.some((condition) => !supported.has(condition))
+    ) {
+      return invalid(
+        "UNSUPPORTED_RESERVE_TRIGGER",
+        "Поддерживаются только friendly_contact и enemy_breakthrough.",
+      );
+    }
+    if (
+      data.triggerRadius < 1 ||
+      data.maxCommitImpulse < order.startImpulse ||
+      data.maxCommitImpulse > 5 ||
+      data.targetPriority.some((hexId) => !state.hexes[hexId])
+    ) {
+      return invalid(
+        "INVALID_RESERVE_WINDOW",
+        "Радиус, окно импульсов или приоритеты резерва недопустимы.",
       );
     }
   }
@@ -415,16 +542,10 @@ export function validateWegoCommand(
   return valid();
 }
 
-interface MovementIntent {
-  order: PlannedOrder;
-  from: string;
-  to: string;
-}
-
 function nextMovementIntent(
   state: GameState,
   order: PlannedOrder,
-): MovementIntent | undefined {
+): ValidatedMovementIntent | undefined {
   if (
     order.orderType !== "march" &&
     order.orderType !== "advance" &&
@@ -432,23 +553,37 @@ function nextMovementIntent(
   ) {
     return undefined;
   }
-  const route = order.route;
-  const lead = state.units[order.entityIds[0]];
-  if (!route || !lead) return undefined;
-  const current = route.indexOf(lead.hexId);
-  const progress = current >= 0 ? current : order.progressIndex ?? 0;
-  const to = route[progress + 1];
-  return to ? { order, from: lead.hexId, to } : undefined;
+  const intent = evaluateMovementStep(state, order, {
+    allowEnemyOccupiedTarget: true,
+  });
+  return intent.canEnter ? intent : undefined;
 }
 
 function createMeetingContact(
   state: GameState,
-  left: MovementIntent,
-  right: MovementIntent,
+  left: ValidatedMovementIntent,
+  right: ValidatedMovementIntent,
   context: ImpulseExecutionContext,
 ): ContactState {
+  const leftOrder = state.plans[left.side].orders.find(
+    (order) => order.id === left.orderId,
+  )!;
+  const rightOrder = state.plans[right.side].orders.find(
+    (order) => order.id === right.orderId,
+  )!;
+  const attackerSide = state.initiativeSide;
+  const defenderSide = enemyOf(attackerSide);
+  const attackerIntent = left.side === attackerSide ? left : right;
+  const defenderIntent = left.side === defenderSide ? left : right;
+  const attackerOrder =
+    leftOrder.side === attackerSide ? leftOrder : rightOrder;
+  const defenderOrder =
+    leftOrder.side === defenderSide ? leftOrder : rightOrder;
   const entityIds = [
-    ...new Set([...left.order.entityIds, ...right.order.entityIds]),
+    ...new Set([
+      ...attackerIntent.entityIds,
+      ...defenderIntent.entityIds,
+    ]),
   ].sort();
   const id = `contact:${state.turn}:${context.impulse}:meeting:${entityIds.join(":")}`;
   const existing = state.contacts.find((contact) => contact.id === id);
@@ -456,17 +591,16 @@ function createMeetingContact(
   const contact: ContactState = {
     id,
     type: "MEETING_ENGAGEMENT",
-    hexId: left.to,
-    entityIds,
-    participantIds: entityIds,
-    supportIds: [
-      ...new Set([
-        ...(left.order.supportIds ?? []),
-        ...(right.order.supportIds ?? []),
-      ]),
-    ],
-    reserveIds: [],
-    sourceOrderIds: [left.order.id, right.order.id],
+    hexId: left.toHexId,
+    attackerSide,
+    defenderSide,
+    attackerParticipantIds: [...attackerIntent.entityIds].sort(),
+    defenderParticipantIds: [...defenderIntent.entityIds].sort(),
+    attackerSupportIds: [...new Set(attackerOrder.supportIds ?? [])].sort(),
+    defenderSupportIds: [...new Set(defenderOrder.supportIds ?? [])].sort(),
+    attackerReserveIds: [],
+    defenderReserveIds: [],
+    sourceOrderIds: [left.orderId, right.orderId],
     impulse: context.impulse,
     createdAtImpulse: context.impulse,
     detectedBy: ["germany", "ussr"],
@@ -492,15 +626,18 @@ function createMeetingContact(
 
 function triggerBridgeReaction(
   state: GameState,
-  intent: MovementIntent,
+  intent: ValidatedMovementIntent,
   events: GameEvent[],
 ): boolean {
-  const edge = sharedEdge(parseKey(intent.from), parseKey(intent.to));
+  const edge = sharedEdge(
+    parseKey(intent.fromHexId),
+    parseKey(intent.toHexId),
+  );
   if (edge == null) return false;
-  const key = sharedEdgeKey(state, intent.from, edge);
+  const key = sharedEdgeKey(state, intent.fromHexId, edge);
   const prepared = key ? state.preparedBridgeDemolitions[key] : undefined;
-  if (!key || !prepared || prepared.side === intent.order.side) return false;
-  const plan = state.plans[enemyOf(intent.order.side)];
+  if (!key || !prepared || prepared.side === intent.side) return false;
+  const plan = state.plans[enemyOf(intent.side)];
   const reaction = plan.reactions
     .filter(
       (candidate) =>
@@ -521,19 +658,23 @@ function triggerBridgeReaction(
       );
     });
   if (!reaction) return false;
-  setBridgeState(state, intent.from, edge, "destroyed");
+  setBridgeState(state, intent.fromHexId, edge, "destroyed");
   delete state.preparedBridgeDemolitions[key];
   reaction.uses += 1;
   reaction.status =
     reaction.uses >= reaction.maxUses ? "resolved" : "committed";
   events.push({ type: "REACTION_TRIGGERED", reactionId: reaction.id });
-  events.push({ type: "BRIDGE_DESTROYED", hexId: intent.from, edge });
-  intent.order.status = "failed";
-  intent.order.failureReason = "Мост подорван реакцией противника.";
+  events.push({ type: "BRIDGE_DESTROYED", hexId: intent.fromHexId, edge });
+  const intentOrder = state.plans[intent.side].orders.find(
+    (order) => order.id === intent.orderId,
+  );
+  if (!intentOrder) return true;
+  intentOrder.status = "failed";
+  intentOrder.failureReason = "Мост подорван реакцией противника.";
   events.push({
     type: "ORDER_FAILED",
-    orderId: intent.order.id,
-    reason: intent.order.failureReason,
+    orderId: intentOrder.id,
+    reason: intentOrder.failureReason,
   });
   return true;
 }
@@ -667,7 +808,7 @@ function executeImpulse(state: GameState, events: GameEvent[]): void {
   const intents = activeOrders
     .filter((order) => !waitingIds.has(order.id))
     .map((order) => nextMovementIntent(state, order))
-    .filter((intent): intent is MovementIntent => !!intent);
+    .filter((intent): intent is ValidatedMovementIntent => !!intent);
   const meetingOrderIds = new Set<string>();
   for (let leftIndex = 0; leftIndex < intents.length; leftIndex++) {
     for (
@@ -678,15 +819,22 @@ function executeImpulse(state: GameState, events: GameEvent[]): void {
       const left = intents[leftIndex];
       const right = intents[rightIndex];
       if (
-        left.order.side !== right.order.side &&
-        (left.to === right.to ||
-          (left.from === right.to && left.to === right.from))
+        left.side !== right.side &&
+        (left.toHexId === right.toHexId ||
+          (left.fromHexId === right.toHexId &&
+            left.toHexId === right.fromHexId))
       ) {
         createMeetingContact(state, left, right, context);
-        meetingOrderIds.add(left.order.id);
-        meetingOrderIds.add(right.order.id);
-        left.order.status = "executing";
-        right.order.status = "executing";
+        meetingOrderIds.add(left.orderId);
+        meetingOrderIds.add(right.orderId);
+        const leftOrder = state.plans[left.side].orders.find(
+          (order) => order.id === left.orderId,
+        );
+        const rightOrder = state.plans[right.side].orders.find(
+          (order) => order.id === right.orderId,
+        );
+        if (leftOrder) leftOrder.status = "executing";
+        if (rightOrder) rightOrder.status = "executing";
       }
     }
   }
@@ -694,10 +842,10 @@ function executeImpulse(state: GameState, events: GameEvent[]): void {
   const bridgeStopped = new Set<string>();
   for (const intent of intents) {
     if (
-      !meetingOrderIds.has(intent.order.id) &&
+      !meetingOrderIds.has(intent.orderId) &&
       triggerBridgeReaction(state, intent, events)
     ) {
-      bridgeStopped.add(intent.order.id);
+      bridgeStopped.add(intent.orderId);
     }
   }
 
@@ -867,7 +1015,7 @@ function resolveCommittedCardsForOrder(
           const hq = lead ? commandInfo(state, lead).hq : undefined;
           if (hq) {
             const value = effect.value ?? 2;
-            hq.commandPoints += value;
+            const startsAtTurn = state.turn + 1;
             state.temporaryCommandEffects.push({
               id: `command-effect:${cardId}:${hq.id}`,
               targetHqId: hq.id,
@@ -875,9 +1023,9 @@ function resolveCommittedCardsForOrder(
               initiativeModifier: value,
               withdrawalDelayModifier:
                 definition.defId === "sov-directive3" ? 1 : undefined,
-              startsAtTurn: state.turn,
+              startsAtTurn,
               expiresAfterTurn:
-                state.turn + (effect.durationTurns ?? 1) - 1,
+                startsAtTurn + (effect.durationTurns ?? 1) - 1,
             });
           }
           break;
@@ -1055,8 +1203,20 @@ export function sanitizeStateForSide(
   const visibleEntityIds = new Set(
     state.contacts
       .filter((contact) => contact.detectedBy.includes(side))
-      .flatMap((contact) => contact.entityIds),
+      .flatMap(allContactEntityIds),
   );
+  view.contacts = view.contacts
+    .filter((contact) => contact.detectedBy.includes(side))
+    .map((contact) => {
+      if (contact.attackerSide === side) {
+        contact.defenderSupportIds = [];
+        contact.defenderReserveIds = [];
+      } else {
+        contact.attackerSupportIds = [];
+        contact.attackerReserveIds = [];
+      }
+      return contact;
+    });
   view.plans[opponent].orders = view.plans[opponent].orders
     .filter((order) =>
       order.entityIds.some((entityId) => visibleEntityIds.has(entityId)),
@@ -1086,6 +1246,30 @@ export function sanitizeStateForSide(
             (order) => order.id === summary.orderId,
           ),
       );
+    const visibleToSide = (unitId: string): boolean =>
+      state.units[unitId]?.side === side || visibleEntityIds.has(unitId);
+    view.afterActionReport.destroyedUnits =
+      view.afterActionReport.destroyedUnits.filter(visibleToSide);
+    view.afterActionReport.damagedThisTurn =
+      view.afterActionReport.damagedThisTurn.filter(visibleToSide);
+    view.afterActionReport.understrengthUnits =
+      view.afterActionReport.understrengthUnits.filter(visibleToSide);
+    view.afterActionReport.damagedUnits =
+      view.afterActionReport.damagedThisTurn;
+    view.afterActionReport.combats = view.afterActionReport.combats
+      .filter((combat) => {
+        const contact = combat.contactId
+          ? state.contacts.find(
+              (candidate) => candidate.id === combat.contactId,
+            )
+          : undefined;
+        return !contact || contact.detectedBy.includes(side);
+      })
+      .map((combat) => ({
+        ...combat,
+        attackerIds: combat.attackerIds.filter(visibleToSide),
+        defenderIds: combat.defenderIds.filter(visibleToSide),
+      }));
   }
   return view;
 }

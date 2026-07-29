@@ -11,7 +11,7 @@ import {
   ORDER_COST,
   type ImpulseExecutionContext,
 } from "@/engine/order-execution";
-import { neighbors, parseKey } from "@/engine/hex";
+import { neighbors, parseKey, sharedEdge } from "@/engine/hex";
 import { directionForEdge, updateSharedEdge } from "@/engine/edges";
 import { createRaseiniaiWegoTestState } from "@/scenarios/baltic-1941/wego-test";
 
@@ -171,9 +171,17 @@ describe("v0.4 concrete order executors", () => {
 
   it("advance creates contact against an occupied target", () => {
     const state = createRaseiniaiWegoTestState();
+    const edge = sharedEdge(parseKey("16_29"), parseKey("17_29"));
+    if (edge == null) throw new Error("Expected adjacent fixture hexes");
+    updateSharedEdge(state, "16_29", directionForEdge(edge)!, (bridge) => ({
+      edge,
+      type: bridge?.type ?? "road",
+      state: "intact",
+    }));
     const order = {
       ...baseOrder(state, "advance"),
       route: ["16_29", "17_29"],
+      remainingMovementBudget: 10,
     };
     const result = executePlannedOrder(state, order, context());
     expect(result.status).toBe("contact");
@@ -272,7 +280,14 @@ describe("v0.4 concrete order executors", () => {
       id: "contact:test",
       type: "ATTACK",
       hexId: "17_29",
-      entityIds: ["ger-1pz", "sov-2td"],
+      attackerSide: "germany",
+      defenderSide: "ussr",
+      attackerParticipantIds: ["ger-1pz"],
+      defenderParticipantIds: ["sov-2td"],
+      attackerSupportIds: [],
+      defenderSupportIds: [],
+      attackerReserveIds: [],
+      defenderReserveIds: [],
       detectedBy: ["germany", "ussr"],
       impulse: 0,
       resolved: false,
@@ -289,7 +304,8 @@ describe("v0.4 concrete order executors", () => {
     };
     const result = executePlannedOrder(state, order, context());
     expect(result.status).toBe("completed");
-    expect(state.contacts[0].reserveIds).toContain("ger-6pz");
+    expect(state.contacts[0].attackerParticipantIds).toContain("ger-6pz");
+    expect(state.contacts[0].attackerReserveIds).not.toContain("ger-6pz");
   });
 
   it("demolition requires an engineer", () => {
@@ -326,6 +342,7 @@ describe("v0.4 concrete order executors", () => {
       ...baseOrder(state, "march"),
       route: ["16_29", "17_29"],
       contactPolicy: "avoid" as const,
+      remainingMovementBudget: 10,
     };
     state.plans.germany.reactions.push({
       id: "reroute",

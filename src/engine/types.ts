@@ -567,19 +567,54 @@ export type ContactType =
 export interface ContactState {
   id: string;
   hexId: string;
-  entityIds: string[];
   type: ContactType;
   impulse: number;
   detectedBy: Side[];
   resolved: boolean;
   attackerSide?: Side;
+  defenderSide?: Side;
+  attackerParticipantIds: string[];
+  defenderParticipantIds: string[];
+  attackerSupportIds: string[];
+  defenderSupportIds: string[];
+  attackerReserveIds: string[];
+  defenderReserveIds: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
+  entityIds?: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
   participantIds?: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
   supportIds?: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
   reserveIds?: string[];
   createdAtImpulse?: number;
   status?: "detected" | "forming" | "ready" | "resolving" | "resolved" | "cancelled";
   resolutionId?: string;
   sourceOrderIds?: string[];
+}
+
+export type SupportType = "artillery" | "heavy_at" | "air";
+
+export interface SupportUsage {
+  unitId: string;
+  impulse: number;
+  contactId: string;
+}
+
+export interface MovementIntent {
+  orderId: string;
+  side: Side;
+  entityIds: string[];
+  fromHexId: string;
+  toHexId: string;
+}
+
+export interface ValidatedMovementIntent extends MovementIntent {
+  movementCost: number;
+  fuelCosts: Record<string, number>;
+  canEnter: boolean;
+  stopAfterEntry: boolean;
+  blockingReason?: string;
 }
 
 export interface TemporaryCommandEffect {
@@ -617,6 +652,9 @@ export interface DailyAfterActionReport {
   impulses: ImpulseReport[];
   combats: CombatResolution[];
   destroyedUnits: string[];
+  damagedThisTurn: string[];
+  understrengthUnits: string[];
+  /** @deprecated v0.4 compatibility alias for damagedThisTurn. */
   damagedUnits: string[];
   capturedObjectives: string[];
   bridgesDestroyed: string[];
@@ -746,6 +784,8 @@ export type GameEvent =
   | { type: "DELAYING_FORCE_WITHDREW"; unitId: string; path: string[] }
   | { type: "DELAYING_FORCE_PINNED"; unitId: string }
   | { type: "RESERVE_COMMITTED"; orderId: string; contactId: string; unitIds: string[] }
+  | { type: "RESERVE_NOT_COMMITTED"; orderId: string }
+  | { type: "ORDER_ABORTED_BY_LOSSES"; orderId: string; lossSteps: number; threshold: number }
   | { type: "PONTOON_COMPLETED"; orderId: string; hexId: string; edge: number }
   | { type: "RECOVERY_PROGRESS"; orderId: string; unitId: string; organizationGained: number }
   | { type: "REACTION_FAILED"; reactionId: string; reason: string }
@@ -801,6 +841,8 @@ export interface GameState {
   processedCommandIds: string[];
   preparedBridgeDemolitions: Record<string, { side: Side; preparedById?: string }>;
   temporaryCommandEffects: TemporaryCommandEffect[];
+  supportUsage: SupportUsage[];
+  turnStartedAtEventIndex: number;
   impulseReports: ImpulseReport[];
   combatResolutions: CombatResolution[];
   afterActionReport?: DailyAfterActionReport;

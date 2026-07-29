@@ -2,9 +2,9 @@ import type { GameCommand, GameState, SaveGame } from "@/engine/types";
 import { replayCommands } from "@/engine/engine";
 import { createInitialState } from "@/scenarios/baltic-1941/scenario";
 
-export const CURRENT_SCHEMA_VERSION = 4;
-export const CURRENT_ENGINE_VERSION = "0.4.0";
-export const CURRENT_SCENARIO_VERSION = "0.4.0";
+export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_ENGINE_VERSION = "0.4.1";
+export const CURRENT_SCENARIO_VERSION = "0.4.1";
 
 export type SaveMigrationResult =
   | { ok: true; save: SaveGame; migratedFrom?: number; warnings: string[] }
@@ -27,7 +27,13 @@ function commandsFrom(value: unknown): GameCommand[] | undefined {
   return commands;
 }
 
-function migrateCommand(command: GameCommand): GameCommand {
+function migrateCommand(command: GameCommand): GameCommand | undefined {
+  if (
+    command.type === "UPSERT_REACTION" &&
+    command.reaction?.condition === "loss_threshold"
+  ) {
+    return undefined;
+  }
   if (command.type !== "UPSERT_PLANNED_ORDER" || !command.plannedOrder) {
     return command;
   }
@@ -80,7 +86,14 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
   if (!sourceCommands) {
     return { ok: false, code: "INVALID_SAVE", message: "Журнал команд отсутствует или повреждён." };
   }
-  const commands = sourceCommands.map(migrateCommand);
+  const removedLossThreshold = sourceCommands.some(
+    (command) =>
+      command.type === "UPSERT_REACTION" &&
+      command.reaction?.condition === "loss_threshold",
+  );
+  const commands = sourceCommands
+    .map(migrateCommand)
+    .filter((command): command is GameCommand => !!command);
   const seed =
     typeof value.seed === "number"
       ? value.seed
@@ -101,9 +114,14 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
   }
   const sourceVersion = schemaVersion ?? 2;
   const warnings: string[] = [];
+  if (removedLossThreshold) {
+    warnings.push(
+      "Устаревшая реакция loss_threshold удалена: порог потерь теперь задаётся lossTolerance приказа.",
+    );
+  }
   if (sourceVersion < CURRENT_SCHEMA_VERSION) {
     warnings.push(
-      `Сохранение v${sourceVersion} перенесено в v${CURRENT_SCHEMA_VERSION}; результаты ещё не исполненных WEGO-приказов будут рассчитаны правилами v0.4.`,
+      `Сохранение v${sourceVersion} перенесено в v${CURRENT_SCHEMA_VERSION}; WEGO-команды будут воспроизведены правилами v0.4.1.`,
     );
   }
   const save: SaveGame = {

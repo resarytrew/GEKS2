@@ -11,6 +11,7 @@ export { resolveHeadquartersLoss } from "./headquarters";
 export { validateStateInvariants } from "./invariants";
 export {
   executePlannedOrder,
+  evaluateMovementStep,
   movementBudgetForOrder,
   ORDER_COST,
 } from "./order-execution";
@@ -21,5 +22,25 @@ export {
   triggerEncirclementWithdrawals,
   IMPULSE_LABELS,
 } from "./wego";
-export { allocateLosses, findRetreatRoute, resolveContact } from "./wego-combat";
+export {
+  allocateLosses,
+  findRetreatRoute,
+  resolveContact,
+  LOSS_TOLERANCE_STEPS,
+  shouldAbortOrderForLosses,
+} from "./wego-combat";
+export {
+  getEligibleSupportUnits,
+  eligibleSupportIds,
+  SUPPORT_RANGE,
+} from "./support";
+export {
+  allContactEntityIds,
+  normalizeContactState,
+} from "./contact";
+export {
+  ORDER_RELIABILITY_LABELS,
+  ORDER_STATUS_LABELS,
+  ORDER_TYPE_LABELS,
+} from "./presentation";
 export { createSaveGame, migrateSaveGame, restoreSaveGame } from "./persistence";

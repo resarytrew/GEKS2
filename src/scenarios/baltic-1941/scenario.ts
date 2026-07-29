@@ -353,9 +353,9 @@ export function createInitialState(options: NewGameOptions = {}): GameState {
     .sort((a, b) => (b.lon ?? 0) - (a.lon ?? 0))[0];
 
   return {
-    schemaVersion: 4,
-    engineVersion: "0.4.0",
-    scenarioVersion: "0.4.0",
+    schemaVersion: 5,
+    engineVersion: "0.4.1",
+    scenarioVersion: "0.4.1",
     version: 1,
     scenarioId: SCENARIO.id,
     matchId: options.matchId ?? crypto.randomUUID(),
@@ -421,6 +421,8 @@ export function createInitialState(options: NewGameOptions = {}): GameState {
     processedCommandIds: [],
     preparedBridgeDemolitions: {},
     temporaryCommandEffects: [],
+    supportUsage: [],
+    turnStartedAtEventIndex: 0,
     impulseReports: [],
     combatResolutions: [],
   };
