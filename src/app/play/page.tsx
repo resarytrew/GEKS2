@@ -25,6 +25,7 @@ export default function PlayPage() {
   const setPanel = useGame((s) => s.setPanel);
   const saveProgress = useGame((s) => s.saveProgress);
   const [showZOC, setShowZOC] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [handoffAcknowledgedFor, setHandoffAcknowledgedFor] = useState<Side | null>(null);
 
@@ -37,6 +38,22 @@ export default function PlayPage() {
   useEffect(() => {
     if (!state) router.replace("/");
   }, [state, router]);
+
+  useEffect(() => {
+    const shortcuts = (event: KeyboardEvent) => {
+      if (event.ctrlKey || event.metaKey || event.altKey || (event.target as HTMLElement)?.tagName === "INPUT") return;
+      const key = event.key.toLowerCase();
+      if (key === "m") setShowZOC((value) => !value);
+      if (key === "l") setPanel("log");
+      if (key === "o") setPanel("objectives");
+      if (key === "s") { event.preventDefault(); void onSave(); }
+      if (key === "escape") useGame.getState().clearSelection();
+    };
+    window.addEventListener("keydown", shortcuts);
+    return () => window.removeEventListener("keydown", shortcuts);
+  // onSave intentionally reads current store action; this effect only binds document shortcuts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setPanel]);
 
   if (!state) {
     return (
@@ -78,8 +95,8 @@ export default function PlayPage() {
           />
         </main>
 
-        <aside className="field-sheet hidden w-[340px] shrink-0 border-l-2 border-[#77715e] md:block">
-          <SidePanels />
+        <aside className={`field-sheet relative hidden shrink-0 border-l-2 border-[#77715e] transition-[width] duration-200 md:block ${sheetOpen ? "w-[340px]" : "w-11"}`}>
+          {sheetOpen ? <><button aria-label="Свернуть оперативный лист" title="Свернуть оперативный лист" onClick={() => setSheetOpen(false)} className="absolute right-0 top-0 z-10 border-l border-b border-staff-edge p-2 text-staff-mute hover:text-staff-ink"><Icon name="chevron" className="h-4 w-4 rotate-180" /></button><SidePanels /></> : <button aria-label="Открыть оперативный лист" title="Открыть оперативный лист" onClick={() => setSheetOpen(true)} className="flex h-full w-full flex-col items-center gap-3 border-l-2 border-transparent pt-4 text-staff-ink-dim hover:border-staff-gold hover:text-staff-ink"><Icon name="chevron" className="h-4 w-4" /><span className="[writing-mode:vertical-rl] text-[9px] font-bold uppercase tracking-[.14em]">Оперативный лист</span></button>}
         </aside>
       </div>
       <BottomBar />

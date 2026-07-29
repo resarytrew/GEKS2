@@ -1,6 +1,6 @@
 import type { ReactNode, SVGProps } from "react";
 
-type IconName = "archive" | "target" | "journal" | "layers" | "report" | "help" | "chevron" | "map" | "orders" | "close" | "compass" | "zoomIn" | "save";
+type IconName = "archive" | "target" | "journal" | "layers" | "report" | "help" | "chevron" | "map" | "orders" | "close" | "compass" | "zoomIn" | "zoomOut" | "save";
 
 export function Icon({ name, className, ...props }: { name: IconName } & SVGProps<SVGSVGElement>) {
   const common = { fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -17,6 +17,7 @@ export function Icon({ name, className, ...props }: { name: IconName } & SVGProp
     close: <path {...common} d="m6 6 12 12M18 6 6 18" />,
     compass: <><circle {...common} cx="12" cy="12" r="9" /><path {...common} d="m15 9-2 5-5 2 2-5zM12 3v2" /></>,
     zoomIn: <><circle {...common} cx="10.5" cy="10.5" r="6.5" /><path {...common} d="m16 16 5 5M10.5 7.5v6M7.5 10.5h6" /></>,
+    zoomOut: <><circle {...common} cx="10.5" cy="10.5" r="6.5" /><path {...common} d="m16 16 5 5M7.5 10.5h6" /></>,
     save: <><path {...common} d="M5 3h12l3 3v15H5zM8 3v6h8V3M8 20v-6h8v6" /></>,
   };
   return <svg viewBox="0 0 24 24" aria-hidden="true" className={className} {...props}>{paths[name]}</svg>;

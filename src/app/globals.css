@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+:root {
+  --map-paper-base: #d8cfb5; --map-paper-light: #eee6d1; --map-paper-shadow: #b7aa88;
+  --ink-primary: #252924; --ink-secondary: #4b493d; --ink-muted: #777160;
+  --rail-dark: #252924; --rail-surface: #31362f; --rail-border: #55584e;
+  --order-accent: #a77b2d; --order-accent-hover: #bd8e38;
+  --german-base: #566877; --german-dark: #293842; --german-light: #dce3e6;
+  --soviet-base: #94443a; --soviet-dark: #54251f; --soviet-light: #ead4cf;
+  --terrain-water: #819cb0; --terrain-forest: #788b62; --terrain-forest-deep: #657455; --terrain-swamp: #a59e75; --terrain-field: #c9bc8f;
+  --status-warning: #b85b31; --status-success: #5f7d54; --status-danger: #a74032;
+  --line-map: rgba(75, 73, 61, .32); --line-strong: rgba(55, 53, 45, .68);
+}
+
 @theme {
   /* Operational-map system: paper, ink and field-board materials. */
   --color-staff-void: #242823;

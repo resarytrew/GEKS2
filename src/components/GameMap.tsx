@@ -13,6 +13,7 @@ import {
 } from "@/renderer/draw";
 import { HEX_SIZE, axialToPixel } from "@/engine/hex";
 import type { Reachable as Reach } from "@/engine/rules";
+import { Icon } from "@/components/Icon";
 
 interface Props {
   state: GameState;
@@ -246,29 +247,13 @@ export default function GameMap({
         }}
       />
       <canvas ref={offRef} className="hidden" />
-      <div className="pointer-events-none absolute left-3 top-3 rounded bg-black/45 px-2 py-1 text-[10px] uppercase tracking-wider text-staff-ink/80 backdrop-blur-sm">
-        Перетаскивайте — панорама · колесо — масштаб
+      <div className="pointer-events-none absolute left-3 top-3 border border-[#57594f]/70 bg-[#f1e8d2]/90 px-2 py-1 text-[9px] uppercase tracking-[.1em] text-staff-ink-dim">
+        Панорама · колесо: масштаб
       </div>
-      <div className="absolute bottom-3 right-3 flex flex-col gap-1">
-        <button
-          onClick={() => zoomBy(1.2)}
-          className="h-8 w-8 rounded bg-staff-panel/90 text-lg leading-none text-staff-ink shadow hover:bg-staff-panel2"
-        >
-          +
-        </button>
-        <button
-          onClick={() => zoomBy(1 / 1.2)}
-          className="h-8 w-8 rounded bg-staff-panel/90 text-lg leading-none text-staff-ink shadow hover:bg-staff-panel2"
-        >
-          −
-        </button>
-        <button
-          onClick={refit}
-          className="h-8 w-8 rounded bg-staff-panel/90 text-[10px] text-staff-ink shadow hover:bg-staff-panel2"
-          title="Уместить карту"
-        >
-          ⤢
-        </button>
+      <div className="absolute bottom-3 right-3 flex flex-col border border-[#77715e] bg-[#f1e8d2] shadow-[1px_2px_4px_rgba(34,31,22,.28)]">
+        <button aria-label="Приблизить карту" title="Приблизить" onClick={() => zoomBy(1.2)} className="flex h-10 w-10 items-center justify-center border-b border-staff-edge text-staff-ink hover:bg-staff-panel2"><Icon name="zoomIn" className="h-4 w-4" /></button>
+        <button aria-label="Отдалить карту" title="Отдалить" onClick={() => zoomBy(1 / 1.2)} className="flex h-10 w-10 items-center justify-center border-b border-staff-edge text-staff-ink hover:bg-staff-panel2"><Icon name="zoomOut" className="h-4 w-4" /></button>
+        <button aria-label="Показать весь театр" title="Показать весь театр" onClick={refit} className="flex h-10 w-10 items-center justify-center text-staff-ink hover:bg-staff-panel2"><Icon name="map" className="h-4 w-4" /></button>
       </div>
     </div>
   );

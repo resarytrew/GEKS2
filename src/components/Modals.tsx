@@ -5,6 +5,7 @@ import { useGame } from "@/store/gameStore";
 import { EVENTS, SCENARIO } from "@/scenarios/baltic-1941/scenario";
 import { SIDE_SHORT, ordinalTurn } from "@/lib/labels";
 import type { GameEvent } from "@/engine/types";
+import { Icon } from "@/components/Icon";
 
 export default function Modals() {
   const openPanel = useGame((s) => s.openPanel);
@@ -134,7 +135,7 @@ function Log() {
       <div className="staff-scroll max-h-[60vh] overflow-y-auto p-3">
         {log.map((e, i) => (
           <div key={i} className="flex items-start gap-2 border-b border-staff-edge/40 py-1 text-[11px]">
-            <span className="mt-0.5 shrink-0">{icon(e)}</span>
+            <span className="mt-0.5 shrink-0 text-staff-ink-dim">{eventIcon(e)}</span>
             <span className="text-staff-ink-dim">{label(e)}</span>
           </div>
         ))}
@@ -229,32 +230,9 @@ function Mini({ label, value }: { label: string; value: string }) {
   );
 }
 
-function icon(e: GameEvent): string {
-  switch (e.type) {
-    case "UNIT_LOST_STEP":
-    case "UNIT_ELIMINATED":
-    case "COMBAT_DECLARED":
-      return "⚔";
-    case "UNIT_MOVED":
-      return "→";
-    case "BRIDGE_DESTROYED":
-      return "✕";
-    case "CARD_PLAYED":
-    case "CARD_DRAWN":
-      return "✦";
-    case "OBJECTIVE_COMPLETED":
-      return "★";
-    case "OBJECTIVE_FAILED":
-      return "○";
-    case "EVENT_TRIGGERED":
-      return "❖";
-    case "TURN_ADVANCED":
-      return "☼";
-    case "PHASE_CHANGED":
-      return "›";
-    default:
-      return "·";
-  }
+function eventIcon(e: GameEvent) {
+  const name = e.type === "CARD_PLAYED" || e.type === "CARD_DRAWN" ? "orders" : e.type === "OBJECTIVE_COMPLETED" || e.type === "OBJECTIVE_FAILED" ? "target" : e.type === "BRIDGE_DESTROYED" || e.type === "BRIDGE_DAMAGED" ? "map" : e.type === "EVENT_TRIGGERED" ? "report" : "journal";
+  return <Icon name={name} className="h-3.5 w-3.5" />;
 }
 
 function label(e: GameEvent): string {

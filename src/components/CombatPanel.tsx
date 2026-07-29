@@ -78,12 +78,12 @@ export default function CombatPanel() {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4" onClick={close}>
       <div
-        className="animate-telegraph flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-staff-edge bg-staff-panel shadow-2xl"
+        className="animate-telegraph flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden border-y-4 border-[#3f4038] bg-staff-panel shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-staff-edge bg-staff-panel2 px-4 py-2.5">
           <div>
-            <div className="font-dispatch text-base text-staff-gold">Боевой рапорт</div>
+            <div className="font-dispatch text-lg text-staff-ink">Боевой лист</div>
             <div className="text-[10px] uppercase tracking-wider text-staff-mute">Гекс {targetHexId} · {defenders.length} защитн.</div>
           </div>
           <button onClick={close} className="rounded px-2 py-1 text-staff-mute hover:bg-staff-panel hover:text-staff-ink">✕</button>
@@ -158,11 +158,11 @@ export default function CombatPanel() {
               disabled={chosen.length === 0 || phase !== "activation"}
               className="rounded bg-red-800 px-4 py-2 text-xs font-bold uppercase tracking-wider text-red-50 hover:bg-red-700 disabled:opacity-40"
             >
-              Атаковать ▶
+              Подтвердить атаку
             </button>
           ) : (
             <button onClick={close} className="rounded bg-staff-gold px-4 py-2 text-xs font-bold uppercase tracking-wider text-staff-void hover:brightness-110">
-              Принять ▶
+              Закрыть боевой рапорт
             </button>
           )}
         </div>
