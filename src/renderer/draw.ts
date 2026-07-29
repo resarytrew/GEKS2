@@ -10,6 +10,7 @@
 
 import type { GameState, HexState, UnitState, Side } from "@/engine/types";
 import { axialToPixel, edgeMidpoint, hexCorners, HEX_SIZE, neighbors, pixelToAxial, sharedEdge, type Axial } from "@/engine/hex";
+import { hiddenStackCount, MAX_VISIBLE_STACK_COUNTERS, orderRouteStyle, SUPPLY_MARK_SHAPES } from "@/renderer/presentation";
 
 export interface Viewport {
   scale: number;
@@ -297,8 +298,10 @@ function drawCommittedOrders(ctx: CanvasRenderingContext2D, state: GameState, vp
           : state.activeSide === "germany"
             ? "rgba(58,91,132,0.9)"
             : "rgba(167,51,51,0.9)";
-    ctx.lineWidth = Math.max(2, 2.5 * detail);
-    ctx.setLineDash(order.status === "draft" ? [8, 5] : []);
+    const style = orderRouteStyle(order);
+    ctx.lineWidth = Math.max(2, (style === "prepared-attack" ? 4 : style === "advance" ? 3 : 2.5) * detail);
+    // Status takes precedence; otherwise the order geometry is recognisable without colour.
+    ctx.setLineDash(order.status === "draft" ? [8, 5] : style === "withdraw" ? [9, 5] : style === "delay" ? [3, 4] : style === "reserve" ? [2, 3] : []);
     ctx.beginPath();
     for (let index = 0; index < order.route.length; index++) {
       const hex = state.hexes[order.route[index]];
@@ -429,7 +432,7 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
   }
 
   // Three physical counters remain legible; the count marker represents the rest.
-  const show = units.slice(0, 3);
+  const show = units.slice(0, MAX_VISIBLE_STACK_COUNTERS);
   const dx = size * 0.16;
   for (let i = show.length - 1; i >= 0; i--) {
     const u = show[i];
@@ -437,11 +440,12 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
     const oy = (i - (show.length - 1) / 2) * dx;
     drawCounter(ctx, u, center.x + ox, center.y + oy, size, isSel && i === 0);
   }
-  if (units.length > 3) {
+  const hidden = hiddenStackCount(units.length);
+  if (hidden > 0) {
     ctx.fillStyle = "#1a140a";
     ctx.font = `600 ${Math.round(size * 0.26)}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(`+${units.length - 3}`, center.x + size * 0.5, center.y + size * 0.5);
+    ctx.fillText(`+${hidden}`, center.x + size * 0.5, center.y + size * 0.5);
   }
 }
 
@@ -526,10 +530,11 @@ function drawSupplyMark(ctx: CanvasRenderingContext2D, state: UnitState["supplyS
   ctx.strokeStyle = colors[state];
   ctx.fillStyle = colors[state];
   ctx.lineWidth = 1.3;
-  if (state === "full") { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
-  else if (state === "limited") { ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.lineTo(x + r, y); ctx.closePath(); ctx.fill(); }
-  else if (state === "low") { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r); ctx.lineTo(x - r, y + r); ctx.closePath(); ctx.fill(); }
-  else if (state === "isolated") { ctx.beginPath(); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.stroke(); }
+  const shape = SUPPLY_MARK_SHAPES[state];
+  if (shape === "circle") { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  else if (shape === "half-circle") { ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.lineTo(x + r, y); ctx.closePath(); ctx.fill(); }
+  else if (shape === "triangle") { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r); ctx.lineTo(x - r, y + r); ctx.closePath(); ctx.fill(); }
+  else if (shape === "slash") { ctx.beginPath(); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.stroke(); }
   else { ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r); ctx.stroke(); }
   ctx.restore();
 }
