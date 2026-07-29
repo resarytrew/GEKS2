@@ -1,4 +1,8 @@
-# Order execution model v0.4
+# Order execution model v0.4.1
+
+Маршрутный шаг транзакционен: весь стек проверяется на общий исходный гекс,
+ребро, бюджет, топливо и stacking до перемещения первой части. Источником
+расчёта является `evaluateMovementStep`.
 
 The normal game mode is a deterministic six-impulse WEGO day. Both sides create
 hidden `PlannedOrder` records and pay command costs when committing their plans.

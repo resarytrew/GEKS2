@@ -1,5 +1,9 @@
 # Правила ядра
 
+В v0.4.1 только валидированный шаг движения может создать контакт. Участники,
+поддержка и резерв разделены по атакующей и обороняющейся сторонам. Резерв после
+ввода становится участником, но не поддержкой одновременно.
+
 v0.4 uses fractional impulse movement, fuel and ammunition expenditure,
 multi-hex retreats, defensive posture, reserves, engineer work and one canonical
 CRT shared by legacy debug and WEGO combat.

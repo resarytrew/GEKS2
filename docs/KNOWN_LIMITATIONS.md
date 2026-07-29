@@ -1,4 +1,4 @@
-# Известные ограничения v0.4
+# Известные ограничения v0.4.1
 
 - Multiplayer transport is still an adapter rather than a hosted authoritative
   service; hot-seat is the supported mode.
@@ -6,6 +6,9 @@
 - Supply capacity is represented by route state and distance; competing
   formation-by-formation throughput allocation remains future work.
 - Opponent intelligence is contact-based; there is no probabilistic fog model.
+- Acceptance fixture uses representative existing formations as artillery and
+  heavy-AT test assets; it is not a playable historical scenario.
+- Legacy `loss_threshold` reactions are removed with a migration warning.
 
 - Нет точной архивной карты театра: география, дороги, железные дороги,
   болота, реки, мосты и координаты частей реконструированы.

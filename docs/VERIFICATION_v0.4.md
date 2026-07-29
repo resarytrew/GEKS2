@@ -1,5 +1,8 @@
 # Verification v0.4
 
+Этот документ сохраняет baseline v0.4. Актуальный correctness suite и итоговые
+результаты находятся в `VERIFICATION_v0.4.1.md`.
+
 Local and CI gates:
 
 ```powershell

@@ -1,5 +1,9 @@
 # After Action Report
 
+В v0.4.1 `damagedThisTurn` строится только из `UNIT_LOST_STEP` после
+`turnStartedAtEventIndex`, а `understrengthUnits` содержит все сохранившиеся
+части неполного состава. Side-filtered AAR удаляет скрытые вражеские данные.
+
 After impulse six, the engine changes the phase to `after_action` and stores a
 `DailyAfterActionReport`. It contains:
 

@@ -1,4 +1,8 @@
-# Contact resolution model v0.4
+# Contact resolution model v0.4.1
+
+`ContactState` хранит отдельные participant/support/reserve arrays для attacker
+и defender. Один unit не может занимать две роли; сторона поддержки проверяется
+инвариантами после каждой команды.
 
 A contact is a real unresolved game object, not a UI marker. Route collision,
 enemy occupation, a prepared attack, or simultaneous entry creates a

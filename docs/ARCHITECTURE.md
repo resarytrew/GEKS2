@@ -1,4 +1,8 @@
-# Архитектура v0.4
+# Архитектура v0.4.1
+
+Correctness layer добавляет `contact.ts` для нормализации side-specific ролей,
+`support.ts` для authoritative eligibility и `evaluateMovementStep` как единый
+расчёт preview, conflict detection, bridge reaction и исполнения.
 
 WEGO execution is split into `order-execution.ts`, `wego-combat.ts`,
 `after-action.ts`, and `invariants.ts`. `engine.ts` remains the command boundary;
