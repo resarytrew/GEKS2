@@ -27,6 +27,7 @@ export default function PlayPage() {
   const saveProgress = useGame((s) => s.saveProgress);
   const [showZOC, setShowZOC] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(true);
+  const [mobileSheet, setMobileSheet] = useState<"collapsed" | "peek" | "full">("collapsed");
   const [saving, setSaving] = useState(false);
   const [handoffAcknowledgedFor, setHandoffAcknowledgedFor] = useState<Side | null>(null);
 
@@ -39,6 +40,8 @@ export default function PlayPage() {
   useEffect(() => {
     if (!state) router.replace("/");
   }, [state, router]);
+
+  const mobileSheetView = mobileSheet === "collapsed" && (selectedHexId || selectedUnitIds.length > 0) ? "peek" : mobileSheet;
 
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
@@ -100,6 +103,10 @@ export default function PlayPage() {
 
         <aside className={`field-sheet relative hidden shrink-0 border-l-2 border-[#77715e] transition-[width] duration-200 md:block ${sheetOpen ? "w-[340px]" : "w-11"}`}>
           {sheetOpen ? <><button aria-label="Свернуть оперативный лист" title="Свернуть оперативный лист" onClick={() => setSheetOpen(false)} className="absolute right-0 top-0 z-10 border-l border-b border-staff-edge p-2 text-staff-mute hover:text-staff-ink"><Icon name="chevron" className="h-4 w-4 rotate-180" /></button><SidePanels /></> : <button aria-label="Открыть оперативный лист" title="Открыть оперативный лист" onClick={() => setSheetOpen(true)} className="flex h-full w-full flex-col items-center gap-3 border-l-2 border-transparent pt-4 text-staff-ink-dim hover:border-staff-gold hover:text-staff-ink"><Icon name="chevron" className="h-4 w-4" /><span className="[writing-mode:vertical-rl] text-[9px] font-bold uppercase tracking-[.14em]">Оперативный лист</span></button>}
+        </aside>
+
+        <aside className={`field-sheet absolute bottom-0 left-0 right-0 z-20 border-t-2 border-[#77715e] shadow-[0_-5px_16px_rgba(36,40,35,.2)] md:hidden ${mobileSheetView === "full" ? "h-[min(72vh,620px)]" : "h-12"}`} aria-label="Мобильный оперативный лист">
+          {mobileSheetView === "full" ? <><div className="flex h-12 items-center justify-between border-b border-staff-edge px-3"><span className="font-dispatch text-sm text-staff-ink">Оперативный лист</span><button aria-label="Свернуть оперативный лист" onClick={() => setMobileSheet("peek")} className="flex h-10 w-10 items-center justify-center text-staff-ink-dim"><Icon name="chevron" className="h-4 w-4 rotate-90" /></button></div><div className="h-[calc(100%-3rem)]"><SidePanels /></div></> : <button onClick={() => setMobileSheet("full")} className="flex h-12 w-full items-center justify-between px-4 text-left"><span><b className="text-[10px] uppercase tracking-[.12em] text-staff-ink">{selectedHexId ? "Выбранный гекс" : "Оперативный лист"}</b><span className="ml-2 text-[10px] text-staff-ink-dim">{selectedHexId ?? "осмотр, приказы и обстановка"}</span></span><Icon name="chevron" className="h-4 w-4 text-staff-ink-dim -rotate-90" /></button>}
         </aside>
       </div>
       <BottomBar />
