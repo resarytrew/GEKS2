@@ -1,0 +1,320 @@
+"use client";
+
+import { create } from "zustand";
+import type { GameCommand, GameEvent, GameState, Side, UnitState } from "@/engine/types";
+import { applyCommand } from "@/engine/engine";
+import { reachableHexes, predictCombat, type Reachable } from "@/engine/rules";
+import { createInitialState, SCENARIO, type NewGameOptions } from "@/scenarios/baltic-1941/scenario";
+import { createSaveGame } from "@/engine/persistence";
+import { writeLocalSave } from "@/lib/localSaves";
+
+export type Panel = "combat" | "objectives" | "log" | "report" | "endgame" | "help" | "save";
+
+export interface Toast {
+  id: number;
+  text: string;
+  side?: Side;
+  kind: "info" | "combat" | "objective" | "event";
+}
+
+interface StoreState {
+  state: GameState | null;
+  commands: GameCommand[];
+  selectedHexId: string | null;
+  selectedUnitIds: string[];
+  attackTargetHexId: string | null;
+  reachable: Map<string, Reachable> | null;
+  error: string | null;
+  toasts: Toast[];
+  openPanel: Panel | null;
+  toastSeq: number;
+
+  matchDbId: string | null;
+  newGame: (opts?: NewGameOptions) => void;
+  loadGame: (state: GameState, commands: GameCommand[]) => void;
+  saveProgress: () => Promise<string | null>;
+  dispatch: (cmd: GameCommand) => boolean;
+  selectHex: (hexId: string | null) => void;
+  toggleUnitInSelection: (unitId: string) => void;
+  setSelection: (ids: string[]) => void;
+  clearSelection: () => void;
+  setAttackTarget: (hexId: string | null) => void;
+  setPanel: (p: Panel | null) => void;
+  dismissToast: (id: number) => void;
+  clearError: () => void;
+  recomputeReachable: () => void;
+}
+
+function unitsAt(state: GameState, hexId: string): UnitState[] {
+  const hex = state.hexes[hexId];
+  if (!hex) return [];
+  return hex.stackUnitIds.map((id) => state.units[id]).filter((u) => u && !u.eliminated) as UnitState[];
+}
+
+function eventToText(e: GameEvent): { text: string; kind: Toast["kind"]; side?: Side } | null {
+  switch (e.type) {
+    case "UNIT_LOST_STEP": return { text: `Потеря шага: ${e.unitId}`, kind: "combat" };
+    case "UNIT_ELIMINATED": return { text: `Соединение уничтожено: ${e.unitId}`, kind: "combat" };
+    case "UNIT_RETREATED": return { text: `Отход соединения ${e.unitId}`, kind: "combat" };
+    case "BRIDGE_DESTROYED": return { text: "Мост разрушен", kind: "info" };
+    case "CARD_DRAWN": return { text: `Получена карта: ${e.defId}`, kind: "event", side: e.side };
+    case "CARD_PLAYED": return { text: `Разыграна карта: ${e.defId}`, kind: "event" };
+    case "OBJECTIVE_COMPLETED": return { text: "Цель выполнена!", kind: "objective", side: e.side };
+    case "OBJECTIVE_FAILED": return { text: "Цель провалена", kind: "objective", side: e.side };
+    case "EVENT_TRIGGERED": return { text: e.title, kind: "event" };
+    case "WEATHER_CHANGED": return { text: `Погода: ${e.condition}`, kind: "event" };
+    case "HEX_CONTROL_CHANGED": return null;
+    case "GAME_COMPLETED": return { text: `Партия завершена: ${e.resultType}`, kind: "objective" };
+    default: return null;
+  }
+}
+
+export const useGame = create<StoreState>((set, get) => ({
+  state: null,
+  commands: [],
+  selectedHexId: null,
+  selectedUnitIds: [],
+  attackTargetHexId: null,
+  reachable: null,
+  error: null,
+  toasts: [],
+  openPanel: null,
+  toastSeq: 1,
+  matchDbId: null,
+
+  newGame: (opts) => {
+    const state = createInitialState({ mode: "hotseat", ...opts });
+    set({
+      state,
+      commands: [],
+      selectedHexId: null,
+      selectedUnitIds: [],
+      attackTargetHexId: null,
+      reachable: null,
+      error: null,
+      toasts: [{ id: 0, text: "22 июня 1941. Сводка готова.", kind: "event" }],
+      openPanel: "report",
+      toastSeq: 1,
+      matchDbId: null,
+    });
+  },
+
+  loadGame: (state, commands) => {
+    set({
+      state,
+      commands,
+      selectedHexId: null,
+      selectedUnitIds: [],
+      attackTargetHexId: null,
+      reachable: null,
+      error: null,
+      toasts: [],
+      openPanel: null,
+    });
+  },
+
+  saveProgress: async () => {
+    const { state, commands, matchDbId } = get();
+    if (!state) return null;
+    const localSave = writeLocalSave(state, commands);
+    set({ matchDbId: localSave.id });
+    const summary = {
+      ...createSaveGame(state, commands),
+      commands: undefined,
+      seed: state.seed,
+      scores: state.scores,
+      objectives: state.objectives.map((o) => ({ id: o.id, status: o.status })),
+      matchId: state.matchId,
+      mode: state.mode,
+    };
+    const payload = {
+      name: `Партия от ${state.date}`,
+      scenarioId: state.scenarioId,
+      status: state.status,
+      turn: state.turn,
+      date: state.date,
+      activeSide: state.activeSide,
+      winner: state.winner,
+      resultType: state.resultType,
+      commands,
+      summary,
+    };
+    try {
+      const health = await fetch("/api/health");
+      const healthState = await health.json();
+      if (healthState.database !== "connected") return localSave.id;
+      if (matchDbId && !matchDbId.startsWith("local:")) {
+        await fetch(`/api/matches/${matchDbId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        return matchDbId;
+      }
+      const res = await fetch("/api/matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data?.match?.id) {
+        set({ matchDbId: data.match.id });
+        return data.match.id as string;
+      }
+      return localSave.id;
+    } catch {
+      return localSave.id;
+    }
+  },
+
+  dispatch: (cmd) => {
+    const { state, commands } = get();
+    if (!state) return false;
+    const res = applyCommand(state, cmd);
+    if (!res.ok) {
+      set({ error: res.errors[0]?.message ?? "Действие недоступно." });
+      return false;
+    }
+    // Build toasts from new events.
+    const seq = get().toastSeq;
+    const toasts: Toast[] = [];
+    let n = seq;
+    for (const e of res.events) {
+      const t = eventToText(e);
+      if (t) {
+        toasts.push({ id: n++, text: t.text, kind: t.kind, side: t.side });
+      }
+    }
+    if (state.status !== "completed" && res.state.status === "completed") {
+      setTimeout(() => set({ openPanel: "endgame" }), 600);
+    }
+    const prevPhase = state.phase;
+    set({
+      state: res.state,
+      commands: cmd.type === "END_PHASE" || cmd.type === "END_ACTIVATION" ? [...commands, cmd] : [...commands, cmd],
+      error: null,
+      toasts: [...get().toasts.slice(-4), ...toasts].slice(-6),
+      toastSeq: n,
+      // Reset transient selection context across phase boundaries.
+      selectedUnitIds: prevPhase !== res.state.phase ? [] : get().selectedUnitIds.filter((id) => !res.state.units[id]?.eliminated && !res.state.units[id]?.acted),
+      selectedHexId: prevPhase !== res.state.phase ? null : get().selectedHexId,
+      attackTargetHexId: null,
+      openPanel: res.state.phase === "morning_report" && prevPhase !== "morning_report" ? "report" : get().openPanel,
+    });
+    get().recomputeReachable();
+    return true;
+  },
+
+  selectHex: (hexId) => {
+    const st = get();
+    const state = st.state;
+    if (!state) return;
+    if (!hexId) {
+      set({ selectedHexId: null, selectedUnitIds: [], reachable: null });
+      return;
+    }
+    const hex = state.hexes[hexId];
+    if (!hex) return;
+    const side = state.activeSide;
+    const friendly = unitsAt(state, hexId).filter((u) => u.side === side);
+
+    // Movement: selected friendly units + a reachable hex.
+    if (st.selectedUnitIds.length > 0 && st.reachable?.has(hexId)) {
+      const route = st.reachable.get(hexId)?.path;
+      const ok =
+        state.phase === "planning" && route
+          ? get().dispatch({
+              type: "UPSERT_PLANNED_ORDER",
+              side,
+              plannedOrder: {
+                id: `order:${state.turn}:${side}:${[...st.selectedUnitIds].sort().join("+")}`,
+                side,
+                entityIds: [...st.selectedUnitIds],
+                orderType: "march",
+                route,
+                targetHexId: hexId,
+                startImpulse: 0,
+                priority: 1,
+                contactPolicy: "attack",
+                lossTolerance: "normal",
+                status: "draft",
+              },
+            })
+          : get().dispatch({
+              type: "MOVE_STACK",
+              unitIds: st.selectedUnitIds,
+              destinationHexId: hexId,
+            });
+      if (ok) {
+        set({ selectedHexId: null, selectedUnitIds: [], reachable: null });
+      }
+      return;
+    }
+    // Attack: selected units + an enemy-occupied adjacent hex.
+    const enemyOnHex = unitsAt(state, hexId).some((u) => u.side !== side);
+    if (enemyOnHex) {
+      set({ selectedHexId: hexId, attackTargetHexId: hexId, openPanel: "combat" });
+      return;
+    }
+    // Otherwise: inspect / select.
+    const ids = friendly.map((u) => u.id);
+    set({
+      selectedHexId: hexId,
+      selectedUnitIds: ids,
+      attackTargetHexId: null,
+    });
+    get().recomputeReachable();
+  },
+
+  toggleUnitInSelection: (unitId) => {
+    const st = get();
+    const ids = st.selectedUnitIds.includes(unitId)
+      ? st.selectedUnitIds.filter((id) => id !== unitId)
+      : [...st.selectedUnitIds, unitId];
+    set({ selectedUnitIds: ids });
+    get().recomputeReachable();
+  },
+
+  setSelection: (ids) => {
+    set({ selectedUnitIds: ids });
+    get().recomputeReachable();
+  },
+
+  clearSelection: () => set({ selectedHexId: null, selectedUnitIds: [], reachable: null, attackTargetHexId: null }),
+
+  setAttackTarget: (hexId) => {
+    if (hexId) set({ attackTargetHexId: hexId, openPanel: "combat" });
+    else set({ attackTargetHexId: null });
+  },
+
+  setPanel: (p) => set({ openPanel: p }),
+
+  dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),
+  clearError: () => set({ error: null }),
+
+  recomputeReachable: () => {
+    const st = get();
+    const state = st.state;
+    if (!state) return;
+    const ids = st.selectedUnitIds;
+    if (
+      ids.length === 0 ||
+      (state.phase !== "planning" &&
+        state.phase !== "activation" &&
+        state.phase !== "exploitation")
+    ) {
+      set({ reachable: null });
+      return;
+    }
+    const valid = ids.every(
+      (id) => state.units[id] && state.units[id].side === state.activeSide && !state.units[id].acted && !state.units[id].eliminated,
+    );
+    if (!valid) {
+      set({ reachable: null });
+      return;
+    }
+    set({ reachable: reachableHexes(state, ids) });
+  },
+}));
+
+export { predictCombat, SCENARIO, unitsAt };
