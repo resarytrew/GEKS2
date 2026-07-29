@@ -22,7 +22,7 @@ export default function ExecutionPanel() {
           </p>
         </div>
         <span className="font-mono text-[10px] text-staff-gold">
-          {Math.min(state.impulse + 1, 6)} / 6
+          {Math.min(state.impulse + 1, IMPULSE_LABELS.length)} / {IMPULSE_LABELS.length}
         </span>
       </div>
       <div className="mt-3 grid grid-cols-6 gap-1">
@@ -44,7 +44,7 @@ export default function ExecutionPanel() {
         <div className="mt-2 text-[10px] text-staff-mute">
           Текущий интервал:{" "}
           <span className="text-staff-ink">
-            {IMPULSE_LABELS[Math.min(state.impulse, 5)]}
+            {IMPULSE_LABELS[Math.min(state.impulse, IMPULSE_LABELS.length - 1)]}
           </span>
         </div>
       )}

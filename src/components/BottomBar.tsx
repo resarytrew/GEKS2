@@ -5,9 +5,8 @@ import { useGame } from "@/store/gameStore";
 import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
 import { PHASE_HINT, PHASE_LABEL, SIDE_SHORT } from "@/lib/labels";
 import { Icon } from "@/components/Icon";
+import { getVisiblePhaseFlow } from "@/lib/phaseRail";
 import type { CardDefinition, CardEffect } from "@/engine/types";
-
-const TRACK = ["events", "command", "planning", "execution", "supply", "after_action"] as const;
 
 export default function BottomBar() {
   const state = useGame((s) => s.state);
@@ -35,7 +34,7 @@ export default function BottomBar() {
     {error && <div className="flex items-center justify-between border-b border-[#844239] bg-[#71352e] px-4 py-1 text-[11px] text-[#fff1df]"><span>{error}</span><button onClick={clearError}><Icon name="close" className="h-3.5 w-3.5" /></button></div>}
     <div className="flex h-[60px] items-center gap-3 px-3">
       <div className="hidden w-60 border-r border-[#55564b] pr-3 md:block"><div className="text-[9px] font-bold uppercase tracking-[.14em] text-[#c6beaa]">{PHASE_LABEL[state.phase]} · {SIDE_SHORT[state.activeSide]}</div><p className="mt-1 text-[10px] leading-tight text-[#c6beaa]">{PHASE_HINT[state.phase]}</p></div>
-      <div className="phase-track hidden flex-1 items-center justify-center gap-4 lg:flex">{TRACK.map((phase, index) => <span key={phase} className={`text-[9px] uppercase tracking-[.11em] ${state.phase === phase ? "font-bold text-[#e4c572]" : "text-[#a9a695]"}`}><b className="mr-1 font-serif">{index + 1}</b>{phase === "after_action" ? "итоги" : phase === "command" ? "штабы" : phase === "events" ? "события" : phase === "planning" ? "план" : phase === "execution" ? "исполнение" : "снабжение"}</span>)}</div>
+      <div className="phase-track hidden flex-1 items-center justify-center gap-4 lg:flex">{getVisiblePhaseFlow(state).map((phase, index) => <span key={phase.id} className={`text-[9px] uppercase tracking-[.11em] ${phase.status === "current" ? "font-bold text-[#e4c572]" : phase.status === "completed" ? "text-[#d2ccba]" : "text-[#a9a695]"}`}><b className="mr-1 font-serif">{index + 1}</b>{phase.label}</span>)}</div>
       <div className="ml-auto flex items-center gap-2"><button onClick={() => setTray((value) => !value)} className={`flex items-center gap-2 border px-2.5 py-2 text-[10px] font-bold uppercase tracking-[.1em] ${tray ? "border-[#d3ad59] text-[#e4c572]" : "border-[#66675d] text-[#ddd4bd] hover:border-[#a7a18d]"}`}><Icon name="orders" className="h-4 w-4" />Приказы <span className="border-l border-current pl-2">{hand.length}</span></button></div>
     </div>
   </footer>;

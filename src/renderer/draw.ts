@@ -126,34 +126,6 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
   const detail = vp.scale;
   const ids = visibleHexIds(state, vp, view);
 
-  // Only the current side's plan is rendered. Opponent orders remain hidden
-  // until the engine exposes them through detected contacts.
-  const ownOrders = state.plans[state.activeSide]?.orders ?? [];
-  for (const order of ownOrders) {
-    if (!order.route || order.route.length < 2 || order.status === "cancelled") continue;
-    ctx.strokeStyle =
-      order.status === "delayed"
-        ? "rgba(205,137,62,0.9)"
-        : order.status === "failed"
-          ? "rgba(173,58,48,0.9)"
-          : state.activeSide === "germany"
-            ? "rgba(58,91,132,0.9)"
-            : "rgba(167,51,51,0.9)";
-    ctx.lineWidth = Math.max(2, 2.5 * detail);
-    ctx.setLineDash(order.status === "draft" ? [8, 5] : []);
-    ctx.beginPath();
-    for (let index = 0; index < order.route.length; index++) {
-      const hex = state.hexes[order.route[index]];
-      if (!hex) continue;
-      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
-      const screen = worldToScreen(point.x, point.y, vp);
-      if (index === 0) ctx.moveTo(screen.x, screen.y);
-      else ctx.lineTo(screen.x, screen.y);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
-
   // 1. Terrain fill + control wash
   for (const id of ids) {
     const h = state.hexes[id];
@@ -306,6 +278,38 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
       ctx.font = `${imp === "strategic" ? "600 " : ""}${Math.round(10 + 3 * detail)}px 'Iowan Old Style', Georgia, serif`;
       ctx.fillText(h.settlement.name, s.x, s.y);
     }
+  }
+
+  // 10. Committed orders deliberately sit above opaque geography.
+  drawCommittedOrders(ctx, state, vp, detail);
+}
+
+function drawCommittedOrders(ctx: CanvasRenderingContext2D, state: GameState, vp: Viewport, detail: number): void {
+  // Only the active side plan is rendered; opponent routes remain hidden.
+  const ownOrders = state.plans[state.activeSide]?.orders ?? [];
+  for (const order of ownOrders) {
+    if (!order.route || order.route.length < 2 || order.status === "cancelled") continue;
+    ctx.strokeStyle =
+      order.status === "delayed"
+        ? "rgba(205,137,62,0.9)"
+        : order.status === "failed"
+          ? "rgba(173,58,48,0.9)"
+          : state.activeSide === "germany"
+            ? "rgba(58,91,132,0.9)"
+            : "rgba(167,51,51,0.9)";
+    ctx.lineWidth = Math.max(2, 2.5 * detail);
+    ctx.setLineDash(order.status === "draft" ? [8, 5] : []);
+    ctx.beginPath();
+    for (let index = 0; index < order.route.length; index++) {
+      const hex = state.hexes[order.route[index]];
+      if (!hex) continue;
+      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+      const screen = worldToScreen(point.x, point.y, vp);
+      if (index === 0) ctx.moveTo(screen.x, screen.y);
+      else ctx.lineTo(screen.x, screen.y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
   }
 }
 
