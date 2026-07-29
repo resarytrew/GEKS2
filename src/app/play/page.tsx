@@ -10,6 +10,8 @@ import BottomBar from "@/components/BottomBar";
 import CombatPanel from "@/components/CombatPanel";
 import Modals from "@/components/Modals";
 import Toasts from "@/components/Toasts";
+import OrderPlanningPanel from "@/components/OrderPlanningPanel";
+import ExecutionPanel from "@/components/ExecutionPanel";
 import { SIDE_SHORT } from "@/lib/labels";
 import type { Side } from "@/engine/types";
 
@@ -77,8 +79,14 @@ export default function PlayPage() {
           />
         </main>
 
-        <aside className="hidden w-[340px] shrink-0 border-l border-staff-edge bg-staff-bg md:block">
-          <SidePanels />
+        <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden border-l border-staff-edge bg-staff-bg md:flex">
+          <div className="staff-scroll max-h-[62%] shrink-0 overflow-y-auto">
+            <OrderPlanningPanel />
+            <ExecutionPanel />
+          </div>
+          <div className="min-h-0 flex-1">
+            <SidePanels />
+          </div>
         </aside>
       </div>
       <BottomBar />

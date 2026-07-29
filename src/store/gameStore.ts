@@ -23,6 +23,7 @@ interface StoreState {
   selectedHexId: string | null;
   selectedUnitIds: string[];
   attackTargetHexId: string | null;
+  planningRoute: string[] | null;
   reachable: Map<string, Reachable> | null;
   error: string | null;
   toasts: Toast[];
@@ -39,6 +40,7 @@ interface StoreState {
   setSelection: (ids: string[]) => void;
   clearSelection: () => void;
   setAttackTarget: (hexId: string | null) => void;
+  clearPlanningRoute: () => void;
   setPanel: (p: Panel | null) => void;
   dismissToast: (id: number) => void;
   clearError: () => void;
@@ -75,6 +77,7 @@ export const useGame = create<StoreState>((set, get) => ({
   selectedHexId: null,
   selectedUnitIds: [],
   attackTargetHexId: null,
+  planningRoute: null,
   reachable: null,
   error: null,
   toasts: [],
@@ -90,6 +93,7 @@ export const useGame = create<StoreState>((set, get) => ({
       selectedHexId: null,
       selectedUnitIds: [],
       attackTargetHexId: null,
+      planningRoute: null,
       reachable: null,
       error: null,
       toasts: [{ id: 0, text: "22 июня 1941. Сводка готова.", kind: "event" }],
@@ -106,6 +110,7 @@ export const useGame = create<StoreState>((set, get) => ({
       selectedHexId: null,
       selectedUnitIds: [],
       attackTargetHexId: null,
+      planningRoute: null,
       reachable: null,
       error: null,
       toasts: [],
@@ -199,7 +204,15 @@ export const useGame = create<StoreState>((set, get) => ({
       selectedUnitIds: prevPhase !== res.state.phase ? [] : get().selectedUnitIds.filter((id) => !res.state.units[id]?.eliminated && !res.state.units[id]?.acted),
       selectedHexId: prevPhase !== res.state.phase ? null : get().selectedHexId,
       attackTargetHexId: null,
-      openPanel: res.state.phase === "morning_report" && prevPhase !== "morning_report" ? "report" : get().openPanel,
+      planningRoute:
+        prevPhase !== res.state.phase ? null : get().planningRoute,
+      openPanel:
+        (res.state.phase === "morning_report" &&
+          prevPhase !== "morning_report") ||
+        (res.state.phase === "after_action" &&
+          prevPhase !== "after_action")
+          ? "report"
+          : get().openPanel,
     });
     get().recomputeReachable();
     return true;
@@ -210,7 +223,12 @@ export const useGame = create<StoreState>((set, get) => ({
     const state = st.state;
     if (!state) return;
     if (!hexId) {
-      set({ selectedHexId: null, selectedUnitIds: [], reachable: null });
+      set({
+        selectedHexId: null,
+        selectedUnitIds: [],
+        reachable: null,
+        planningRoute: null,
+      });
       return;
     }
     const hex = state.hexes[hexId];
@@ -221,30 +239,19 @@ export const useGame = create<StoreState>((set, get) => ({
     // Movement: selected friendly units + a reachable hex.
     if (st.selectedUnitIds.length > 0 && st.reachable?.has(hexId)) {
       const route = st.reachable.get(hexId)?.path;
-      const ok =
-        state.phase === "planning" && route
-          ? get().dispatch({
-              type: "UPSERT_PLANNED_ORDER",
-              side,
-              plannedOrder: {
-                id: `order:${state.turn}:${side}:${[...st.selectedUnitIds].sort().join("+")}`,
-                side,
-                entityIds: [...st.selectedUnitIds],
-                orderType: "march",
-                route,
-                targetHexId: hexId,
-                startImpulse: 0,
-                priority: 1,
-                contactPolicy: "attack",
-                lossTolerance: "normal",
-                status: "draft",
-              },
-            })
-          : get().dispatch({
-              type: "MOVE_STACK",
-              unitIds: st.selectedUnitIds,
-              destinationHexId: hexId,
-            });
+      if (state.phase === "planning" && route) {
+        set({
+          selectedHexId: hexId,
+          planningRoute: route,
+          attackTargetHexId: null,
+        });
+        return;
+      }
+      const ok = get().dispatch({
+        type: "MOVE_STACK",
+        unitIds: st.selectedUnitIds,
+        destinationHexId: hexId,
+      });
       if (ok) {
         set({ selectedHexId: null, selectedUnitIds: [], reachable: null });
       }
@@ -253,7 +260,11 @@ export const useGame = create<StoreState>((set, get) => ({
     // Attack: selected units + an enemy-occupied adjacent hex.
     const enemyOnHex = unitsAt(state, hexId).some((u) => u.side !== side);
     if (enemyOnHex) {
-      set({ selectedHexId: hexId, attackTargetHexId: hexId, openPanel: "combat" });
+      set({
+        selectedHexId: hexId,
+        attackTargetHexId: hexId,
+        openPanel: state.phase === "planning" ? null : "combat",
+      });
       return;
     }
     // Otherwise: inspect / select.
@@ -262,6 +273,7 @@ export const useGame = create<StoreState>((set, get) => ({
       selectedHexId: hexId,
       selectedUnitIds: ids,
       attackTargetHexId: null,
+      planningRoute: null,
     });
     get().recomputeReachable();
   },
@@ -280,12 +292,20 @@ export const useGame = create<StoreState>((set, get) => ({
     get().recomputeReachable();
   },
 
-  clearSelection: () => set({ selectedHexId: null, selectedUnitIds: [], reachable: null, attackTargetHexId: null }),
+  clearSelection: () =>
+    set({
+      selectedHexId: null,
+      selectedUnitIds: [],
+      reachable: null,
+      attackTargetHexId: null,
+      planningRoute: null,
+    }),
 
   setAttackTarget: (hexId) => {
     if (hexId) set({ attackTargetHexId: hexId, openPanel: "combat" });
     else set({ attackTargetHexId: null });
   },
+  clearPlanningRoute: () => set({ planningRoute: null }),
 
   setPanel: (p) => set({ openPanel: p }),
 
