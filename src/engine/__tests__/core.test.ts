@@ -342,7 +342,8 @@ describe("engine command/event flow", () => {
     if (!st1.hexes[adj]) return;
     // place attacker adjacent in both states
     for (const st of [st1, st2]) {
-      st.hexes[ger.hexId].stackUnitIds = st.hexes[ger.hexId].stackUnitIds.filter((id) => id !== ger.id);
+      const currentHexId = st.units[ger.id].hexId;
+      st.hexes[currentHexId].stackUnitIds = st.hexes[currentHexId].stackUnitIds.filter((id) => id !== ger.id);
       st.units[ger.id].hexId = adj;
       st.hexes[adj].stackUnitIds.push(ger.id);
       st.units[ger.id].acted = false;

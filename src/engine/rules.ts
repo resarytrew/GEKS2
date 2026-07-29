@@ -301,7 +301,16 @@ function supplyEdgeCost(state: GameState, side: Side, fromId: string, toId: stri
   const to = state.hexes[toId];
   if (!from || !to) return INFINITY;
   if (to.terrain === "sea" || to.terrain === "lake") return INFINITY;
-  if (to.control === enemyOf(side)) return INFINITY; // enemy-held hex blocks the line
+  const enemyControlled = to.control === enemyOf(side);
+  if (
+    to.stackUnitIds.some(
+      (unitId) =>
+        state.units[unitId]?.side === enemyOf(side) &&
+        !state.units[unitId]?.eliminated,
+    )
+  ) {
+    return INFINITY;
+  }
   const tc = TERRAIN_MOVE[to.terrain] ?? TERRAIN_MOVE.clear;
   let cost = Math.min(tc.foot, tc.mot, tc.trk);
   const edge = sharedEdge(parseHex(fromId), parseHex(toId));
@@ -318,17 +327,31 @@ function supplyEdgeCost(state: GameState, side: Side, fromId: string, toId: stri
     if (river && !bridged) return INFINITY;
   }
   if (isInEnemyZOC(state, toId, side)) return INFINITY;
+  // An unoccupied but not yet secured hex can carry emergency truck columns,
+  // though the penalty prevents this from becoming a free deep supply line.
+  if (enemyControlled) cost += 3;
   return cost;
 }
 
 /** Multi-source Dijkstra giving every hex its supply distance from a source. */
-export function supplyDistances(state: GameState, side: Side): Map<string, number> {
+interface SupplyNetwork {
+  distances: Map<string, number>;
+  previous: Map<string, string>;
+  sourceByHex: Map<string, string>;
+}
+
+function buildSupplyNetwork(state: GameState, side: Side): SupplyNetwork {
   const dist = new Map<string, number>();
-  const sources = Object.values(state.supplySources)
-    .filter((source) => source.side === side && source.active)
-    .map((source) => source.hexId);
-  for (const id of sources) {
-    if (state.hexes[id]?.control === side) dist.set(id, 0);
+  const previous = new Map<string, string>();
+  const sourceByHex = new Map<string, string>();
+  const sources = Object.values(state.supplySources).filter(
+    (source) => source.side === side && source.active,
+  );
+  for (const source of sources) {
+    if (state.hexes[source.hexId]?.control === side) {
+      dist.set(source.hexId, 0);
+      sourceByHex.set(source.hexId, source.id);
+    }
   }
   const visited = new Set<string>();
   while (visited.size < dist.size) {
@@ -349,10 +372,75 @@ export function supplyDistances(state: GameState, side: Side): Map<string, numbe
       const c = supplyEdgeCost(state, side, current, nId);
       if (!isFinite(c)) continue;
       const nd = best + c;
-      if (!dist.has(nId) || nd < dist.get(nId)!) dist.set(nId, nd);
+      if (!dist.has(nId) || nd < dist.get(nId)!) {
+        dist.set(nId, nd);
+        previous.set(nId, current);
+        const sourceId = sourceByHex.get(current);
+        if (sourceId) sourceByHex.set(nId, sourceId);
+      }
     }
   }
-  return dist;
+  return { distances: dist, previous, sourceByHex };
+}
+
+export function supplyDistances(state: GameState, side: Side): Map<string, number> {
+  return buildSupplyNetwork(state, side).distances;
+}
+
+function supplyRoute(network: SupplyNetwork, hexId: string): string[] | undefined {
+  if (!network.distances.has(hexId)) return undefined;
+  const route = [hexId];
+  const seen = new Set(route);
+  let cursor = hexId;
+  while (network.previous.has(cursor)) {
+    cursor = network.previous.get(cursor)!;
+    if (seen.has(cursor)) return undefined;
+    seen.add(cursor);
+    route.push(cursor);
+  }
+  return route.reverse();
+}
+
+/** A retreat corridor must remain open beyond the immediately adjacent ring. */
+export function hasRetreatCorridor(
+  state: GameState,
+  unit: UnitState,
+  maxDepth = 4,
+): boolean {
+  const queue: Array<{ hexId: string; depth: number }> = [
+    { hexId: unit.hexId, depth: 0 },
+  ];
+  const visited = new Set([unit.hexId]);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (
+      current.depth >= 2 &&
+      state.hexes[current.hexId]?.control === unit.side &&
+      !isInEnemyZOC(state, current.hexId, unit.side)
+    ) {
+      return true;
+    }
+    if (current.depth >= maxDepth) continue;
+    for (const axial of neighbors(parseHex(current.hexId))) {
+      const nextId = keyOf(axial.q, axial.r);
+      const next = state.hexes[nextId];
+      if (!next || visited.has(nextId)) continue;
+      if (next.terrain === "sea" || next.terrain === "lake") continue;
+      if (
+        next.stackUnitIds.some(
+          (id) =>
+            state.units[id]?.side === enemyOf(unit.side) &&
+            !state.units[id]?.eliminated,
+        )
+      ) {
+        continue;
+      }
+      if (isInEnemyZOC(state, nextId, unit.side)) continue;
+      visited.add(nextId);
+      queue.push({ hexId: nextId, depth: current.depth + 1 });
+    }
+  }
+  return false;
 }
 
 function levelFromDistance(d: number | undefined, surrounded: boolean): SupplyState {
@@ -366,10 +454,22 @@ function levelFromDistance(d: number | undefined, surrounded: boolean): SupplySt
 
 export function recomputeSupply(state: GameState): void {
   for (const side of ["germany", "ussr"] as Side[]) {
-    const dist = supplyDistances(state, side);
+    const network = buildSupplyNetwork(state, side);
+    const dist = network.distances;
     for (const hq of Object.values(state.headquarters)) {
       if (hq.side !== side || hq.eliminated) continue;
       hq.supplyState = levelFromDistance(dist.get(hq.hexId), false);
+      const route = supplyRoute(network, hq.hexId);
+      hq.supplyExplanation = {
+        state: hq.supplyState,
+        sourceId: network.sourceByHex.get(hq.hexId),
+        route,
+        limitingFactors: route
+          ? dist.get(hq.hexId)! > 14
+            ? ["long_route"]
+            : []
+          : ["route_cut"],
+      };
     }
     for (const id in state.units) {
       const u = state.units[id];
@@ -387,7 +487,8 @@ export function recomputeSupply(state: GameState): void {
       const hq = commandingHq(state, u);
       const hqConnected =
         !!hq && hq.supplyState !== "none" && hq.supplyState !== "isolated";
-      const surrounded = openRetreats === 0;
+      const retreatCorridorOpen = hasRetreatCorridor(state, u);
+      const surrounded = openRetreats === 0 || !retreatCorridorOpen;
       const base = levelFromDistance(dist.get(u.hexId), surrounded);
       if (!hqConnected) {
         u.supplyState = hasSupplyRoute ? "isolated" : "none";
@@ -408,6 +509,25 @@ export function recomputeSupply(state: GameState): void {
       } else {
         u.encirclementState = "none";
       }
+      const limitingFactors: string[] = [];
+      const route = supplyRoute(network, u.hexId);
+      if (!route) limitingFactors.push("route_cut");
+      if (!hq) limitingFactors.push("no_command_hq");
+      else if (!hqConnected) limitingFactors.push("hq_supply_disconnected");
+      if (!retreatCorridorOpen) limitingFactors.push("no_retreat_corridor");
+      const supplyDistance = dist.get(u.hexId);
+      if (supplyDistance != null && supplyDistance > 14) {
+        limitingFactors.push("long_route");
+      }
+      if (state.weather.condition === "mud" || state.weather.condition === "rain") {
+        limitingFactors.push("weather");
+      }
+      u.supplyExplanation = {
+        state: u.supplyState,
+        sourceId: network.sourceByHex.get(u.hexId),
+        route,
+        limitingFactors,
+      };
     }
   }
 }
@@ -422,8 +542,8 @@ export function commandingHq(state: GameState, unit: UnitState): HeadquartersSta
     return hq && hq.side === unit.side && !hq.eliminated && !hq.captured ? hq : undefined;
   };
   return (
-    available(unit.parentCorpsId) ??
     available(unit.temporaryCommandId) ??
+    available(unit.parentCorpsId) ??
     available(unit.parentArmyId)
   );
 }
@@ -440,6 +560,23 @@ export function commandInfo(state: GameState, unit: UnitState): CommandInfo {
   const dist = distance(parseHex(hq.hexId), parseHex(unit.hexId));
   const effectiveRange = Math.max(1, hq.commandRange - (hq.movedThisTurn ? 1 : 0));
   return { hq, dist, inRange: dist <= effectiveRange };
+}
+
+export function effectiveHqInitiative(
+  state: GameState,
+  hq: HeadquartersState,
+): number {
+  return (
+    hq.initiative +
+    state.temporaryCommandEffects
+      .filter(
+        (effect) =>
+          effect.targetHqId === hq.id &&
+          effect.startsAtTurn <= state.turn &&
+          effect.expiresAfterTurn >= state.turn,
+      )
+      .reduce((sum, effect) => sum + effect.initiativeModifier, 0)
+  );
 }
 
 export function recomputeCommand(state: GameState): void {
@@ -560,7 +697,7 @@ export function defenderHasHeavyArmor(state: GameState, defenderIds: string[]): 
   });
 }
 
-type Outcome =
+export type Outcome =
   | "no_effect"
   | "defender_disorganized"
   | "attacker_step_loss"
@@ -646,7 +783,7 @@ const CRT: Cell[][] = [
   ],
 ];
 
-function oddsColumn(ratio: number): number {
+export function oddsColumn(ratio: number): number {
   if (ratio < 0.6) return 0;
   if (ratio < 1.0) return 1;
   if (ratio < 1.5) return 2;
@@ -654,6 +791,12 @@ function oddsColumn(ratio: number): number {
   if (ratio < 3.0) return 4;
   if (ratio < 4.0) return 5;
   return 6;
+}
+
+export function resolveCombatCell(ratio: number, dieRoll: number): Cell {
+  const column = oddsColumn(ratio);
+  const rollIndex = Math.max(0, Math.min(5, Math.trunc(dieRoll) - 1));
+  return { ...CRT[column][rollIndex] };
 }
 
 export interface CombatPrediction {

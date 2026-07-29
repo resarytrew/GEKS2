@@ -213,8 +213,8 @@ describe("WEGO impulse execution", () => {
     const result = applyCommand(state, { type: "EXECUTE_IMPULSE" });
     expect(result.state.contacts[0]?.type).toBe("MEETING_ENGAGEMENT");
     expect(result.events.some((event) => event.type === "MEETING_ENGAGEMENT")).toBe(true);
-    expect(result.state.units[german.id].hexId).toBe(adjacent[0].id);
-    expect(result.state.units[soviet.id].hexId).toBe(adjacent[1].id);
+    expect(result.state.contacts[0]?.resolved).toBe(true);
+    expect(result.state.combatResolutions).toHaveLength(1);
   });
 
   it("starts a delayed order only at its actual impulse", () => {
@@ -224,6 +224,7 @@ describe("WEGO impulse execution", () => {
     state = upsert(state, order("germany", german.unit, german.route));
     state = commit(state, "germany");
     state = commit(state, "ussr");
+    state.preparedBridgeDemolitions = {};
     const planned = state.plans.germany.orders[0];
     planned.actualStartImpulse = 2;
     planned.status = "delayed";
@@ -235,15 +236,16 @@ describe("WEGO impulse execution", () => {
     expect(state.units[german.unit.id].hexId).toBe(german.route[1]);
   });
 
-  it("moves to reaction after all six impulses", () => {
+  it("moves to after-action after all six impulses", () => {
     let state = planning();
     state = commit(state, "germany");
     state = commit(state, "ussr");
     for (let impulse = 0; impulse < 6; impulse++) {
       state = applyCommand(state, { type: "EXECUTE_IMPULSE" }).state;
     }
-    expect(state.phase).toBe("reaction");
+    expect(state.phase).toBe("after_action");
     expect(state.impulse).toBe(6);
+    expect(state.afterActionReport).toBeDefined();
   });
 });
 

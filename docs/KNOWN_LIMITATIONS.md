@@ -1,4 +1,11 @@
-# Известные ограничения v0.3
+# Известные ограничения v0.4
+
+- Multiplayer transport is still an adapter rather than a hosted authoritative
+  service; hot-seat is the supported mode.
+- The Raseiniai fixture reuses the full campaign map rather than a cropped map.
+- Supply capacity is represented by route state and distance; competing
+  formation-by-formation throughput allocation remains future work.
+- Opponent intelligence is contact-based; there is no probabilistic fog model.
 
 - Нет точной архивной карты театра: география, дороги, железные дороги,
   болота, реки, мосты и координаты частей реконструированы.

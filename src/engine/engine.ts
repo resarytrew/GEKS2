@@ -36,9 +36,9 @@ import {
   predictCombat,
   recomputeCommand,
   recomputeSupply,
+  resolveCombatCell,
   retreatPath,
   STACK_BASE_LIMIT,
-  type Cell,
 } from "@/engine/rules";
 import { CARD_DEFS, EVENTS, SCENARIO, dateForTurn } from "@/scenarios/baltic-1941/scenario";
 import {
@@ -54,6 +54,7 @@ import {
 } from "@/engine/edges";
 import { awardScoreEvent } from "@/engine/scoring";
 import { applyWegoCommand, validateWegoCommand } from "@/engine/wego";
+import { validateStateInvariants } from "@/engine/invariants";
 
 const PHASE_ORDER: GamePhase[] = [
   "morning_report",
@@ -366,12 +367,11 @@ function applyCombat(s: GameState, cmd: GameCommand, events: GameEvent[]): void 
   for (const a of attackers) a.ammunition = Math.max(0, a.ammunition - 10);
 
   // Resolve via CRT + d6.
-  const column = ratioColumn(prediction.ratio);
   const rollVal = draw(s, events, "combat");
-  let cell: Cell = CRT[column][rollVal - 1];
+  let cell = resolveCombatCell(prediction.ratio, rollVal);
   // Heavy armor prevents clean breakthroughs when not penetrated.
   if (defenderHasHeavyArmor(s, defenderIds) && !prediction.penetrates && (cell.outcome === "breakthrough" || cell.outcome === "defender_destroyed")) {
-    cell = { ...CRT[column][rollVal - 1], outcome: "defender_retreat", advance: false, defLoss: 1 };
+    cell = { ...cell, outcome: "defender_retreat", advance: false, defLoss: 1 };
   }
 
   steps.push({ phase: "Главный бой", description: `Соотношение ${prediction.ratio}:1, бросок d6 = ${rollVal}.`, attackerLosses: cell.attLoss, defenderLosses: Math.min(cell.defLoss, 99), roll: rollVal });
@@ -587,7 +587,20 @@ function applyCard(s: GameState, cmd: GameCommand, events: GameEvent[]): void {
       }
       case "temp_initiative": {
         const hq = s.headquarters[targets[0]];
-        if (hq) hq.commandPoints += eff.value ?? 2;
+        if (hq) {
+          const value = eff.value ?? 2;
+          hq.commandPoints += value;
+          s.temporaryCommandEffects.push({
+            id: `command-effect:${cardId}:${hq.id}`,
+            targetHqId: hq.id,
+            commandPointModifier: value,
+            initiativeModifier: value,
+            withdrawalDelayModifier:
+              def.defId === "sov-directive3" ? 1 : undefined,
+            startsAtTurn: s.turn,
+            expiresAfterTurn: s.turn + (eff.durationTurns ?? 1) - 1,
+          });
+        }
         break;
       }
       case "recon_reveal": {
@@ -672,31 +685,21 @@ function applyBridgeCommand(s: GameState, cmd: GameCommand, events: GameEvent[])
 // Phase / turn machinery.
 // ---------------------------------------------------------------------------
 
-function ratioColumn(ratio: number): number {
-  if (ratio < 0.6) return 0;
-  if (ratio < 1.0) return 1;
-  if (ratio < 1.5) return 2;
-  if (ratio < 2.0) return 3;
-  if (ratio < 3.0) return 4;
-  if (ratio < 4.0) return 5;
-  return 6;
-}
-
-// CRT mirrors rules.ts (kept here so combat resolution is self-contained & pure).
-const CRT: Cell[][] = buildCRT();
-
-function buildCRT(): Cell[][] {
-  // Re-export the canonical CRT from rules by reconstructing compactly.
-  const c = (outcome: Cell["outcome"], attLoss: number, defLoss: number, retreat: boolean, advance: boolean): Cell => ({ outcome, attLoss, defLoss, retreat, advance });
-  return [
-    [c("attacker_step_loss", 1, 0, false, false), c("attacker_step_loss", 1, 0, false, false), c("attacker_repulsed", 0, 0, false, false), c("attacker_repulsed", 0, 0, false, false), c("no_effect", 0, 0, false, false), c("no_effect", 0, 0, false, false)],
-    [c("attacker_step_loss", 1, 0, false, false), c("attacker_repulsed", 0, 0, false, false), c("attacker_repulsed", 0, 0, false, false), c("no_effect", 0, 0, false, false), c("defender_disorganized", 0, 0, false, false), c("exchange", 1, 1, false, false)],
-    [c("attacker_repulsed", 0, 0, false, false), c("no_effect", 0, 0, false, false), c("defender_disorganized", 0, 0, false, false), c("exchange", 1, 1, false, false), c("defender_step_loss", 0, 1, false, false), c("defender_step_loss", 0, 1, false, false)],
-    [c("no_effect", 0, 0, false, false), c("defender_disorganized", 0, 0, false, false), c("exchange", 1, 1, false, false), c("defender_step_loss", 0, 1, false, false), c("defender_step_loss", 0, 1, true, false), c("defender_retreat", 0, 0, true, false)],
-    [c("defender_disorganized", 0, 0, false, false), c("defender_step_loss", 0, 1, false, false), c("defender_step_loss", 0, 1, true, false), c("defender_retreat", 0, 0, true, false), c("defender_retreat", 0, 1, true, false), c("breakthrough", 0, 1, true, true)],
-    [c("defender_step_loss", 0, 1, false, false), c("defender_step_loss", 0, 1, true, false), c("defender_retreat", 0, 0, true, false), c("defender_retreat", 0, 1, true, false), c("breakthrough", 0, 1, true, true), c("defender_destroyed", 0, 99, false, false)],
-    [c("defender_retreat", 0, 0, true, false), c("defender_retreat", 0, 1, true, false), c("breakthrough", 0, 1, true, true), c("breakthrough", 0, 1, true, true), c("defender_destroyed", 0, 99, false, false), c("defender_destroyed", 0, 99, false, false)],
-  ];
+function assertStateInvariants(state: GameState): void {
+  const violations = validateStateInvariants(state);
+  if (violations.length === 0) return;
+  throw new Error(
+    `State invariant violation after command: ${violations
+      .map(
+        (violation) =>
+          `${violation.code}: ${violation.message}${
+            violation.hexIds?.length
+              ? ` [hexes: ${violation.hexIds.join(", ")}]`
+              : ""
+          }`,
+      )
+      .join("; ")}`,
+  );
 }
 
 function enterPhase(s: GameState, phase: GamePhase, events: GameEvent[]): void {
@@ -793,10 +796,38 @@ function enterPhase(s: GameState, phase: GamePhase, events: GameEvent[]): void {
     }
   } else if (phase === "morning_report") {
     for (const id in s.units) s.units[id].acted = false;
+    s.temporaryCommandEffects = s.temporaryCommandEffects.filter((effect) => {
+      if (effect.expiresAfterTurn >= s.turn) return true;
+      events.push({
+        type: "EFFECT_EXPIRED",
+        effectId: effect.id,
+        entityId: effect.targetHqId,
+      });
+      return false;
+    });
   }
 }
 
 function advancePhase(s: GameState, events: GameEvent[]): void {
+  if (s.mode !== "legacy_debug" && s.phase === "after_action") {
+    enterPhase(s, "supply", events);
+    enterPhase(s, "end_of_day", events);
+    if (s.status === "completed") return;
+    s.turn += 1;
+    s.date = dateForTurn(s.turn);
+    events.push({ type: "TURN_ADVANCED", turn: s.turn, date: s.date });
+    if (s.turn >= 5) {
+      const initiativeRoll = roll(s.seed, s.rngCursor);
+      s.rngCursor = initiativeRoll.cursor;
+      if (initiativeRoll.value > 0.6) {
+        s.initiativeSide = enemyOf(s.initiativeSide);
+      }
+    }
+    s.pendingAirSupport = undefined;
+    s.pendingExtraAdvance = undefined;
+    enterPhase(s, "morning_report", events);
+    return;
+  }
   const phases = s.mode === "legacy_debug" ? PHASE_ORDER : WEGO_PHASE_ORDER;
   const idx = phases.indexOf(s.phase);
   const next = phases[(idx + 1) % phases.length];
@@ -849,6 +880,7 @@ export function applyCommand(prev: GameState, cmd: GameCommand): { ok: boolean; 
     s.version += 1;
     if (cmd.commandId) s.processedCommandIds.push(cmd.commandId);
     pushEvents(s, events);
+    assertStateInvariants(s);
     return { ok: true, errors: [], events, state: s };
   }
   if (cmd.type === "END_ACTIVATION") {
@@ -868,6 +900,7 @@ export function applyCommand(prev: GameState, cmd: GameCommand): { ok: boolean; 
     pushEvents(s, events);
     s.version += 1;
     if (cmd.commandId) s.processedCommandIds.push(cmd.commandId);
+    assertStateInvariants(s);
     return { ok: true, errors: [], events, state: s };
   }
 
@@ -920,6 +953,7 @@ export function applyCommand(prev: GameState, cmd: GameCommand): { ok: boolean; 
   s.version += 1;
   if (cmd.commandId) s.processedCommandIds.push(cmd.commandId);
   pushEvents(s, events);
+  assertStateInvariants(s);
   return { ok: true, errors: [], events, state: s };
 }
 

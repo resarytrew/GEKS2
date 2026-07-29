@@ -150,6 +150,21 @@ export type CommandState =
 
 export type MovementClass = "foot" | "motorized" | "tracked" | "rail" | "air";
 
+export type AmmunitionState = "normal" | "low" | "critical" | "empty";
+
+export interface DefensivePosture {
+  level: 0 | 1 | 2 | 3;
+  establishedAtImpulse: number;
+  fallbackHexId?: string;
+}
+
+export interface SupplyExplanation {
+  state: SupplyState;
+  sourceId?: string;
+  route?: string[];
+  limitingFactors: string[];
+}
+
 export type UnitOrderType =
   | "move"
   | "attack"
@@ -215,6 +230,9 @@ export interface UnitState extends MapEntity {
     | "partially_encircled"
     | "encircled"
     | "isolated";
+  defensivePosture?: DefensivePosture;
+  supplyExplanation?: SupplyExplanation;
+  lastMovedAtImpulse?: number;
 }
 
 export type HqEchelon = "corps_hq" | "army_hq" | "front_hq";
@@ -381,6 +399,22 @@ export interface CombatResolution {
   defenderLossSteps: number;
   retreatPath: string[];
   advanceHexId?: string;
+  contactId?: string;
+  roll?: number;
+  lossAllocations?: LossAllocation[];
+  ammunitionSpent?: Record<string, number>;
+}
+
+export interface LossAllocation {
+  mandatory: Array<{
+    unitId: string;
+    steps: number;
+  }>;
+  selectable?: {
+    side: Side;
+    steps: number;
+    eligibleUnitIds: string[];
+  };
 }
 
 export interface DecisionState {
@@ -455,12 +489,43 @@ export interface PlannedOrder {
     | "cancelled";
   progressIndex?: number;
   delayReasons?: string[];
+  movementSpentThisImpulse?: number;
+  remainingMovementBudget?: number;
+  fallbackHexId?: string;
+  fallbackRoute?: string[];
+  bridgeHexId?: string;
+  bridgeEdge?: number;
+  engineeringProgress?: number;
+  reserveData?: ReserveOrderData;
+  completedAtImpulse?: number;
+  failureReason?: string;
+}
+
+export interface ReserveOrderData {
+  triggerRadius: number;
+  triggerConditions: Array<
+    | "friendly_contact"
+    | "friendly_retreat"
+    | "enemy_breakthrough"
+    | "meeting_engagement"
+    | "objective_threatened"
+  >;
+  targetPriority: string[];
+  maxCommitImpulse: number;
+}
+
+export interface ImpulseMovementBudget {
+  available: number;
+  spent: number;
+  remaining: number;
 }
 
 export type ReactionCondition =
   | "enemy_approaches_bridge"
   | "encirclement_threat"
   | "contact_created"
+  | "friendly_contact"
+  | "enemy_breakthrough"
   | "loss_threshold"
   | "route_blocked";
 
@@ -478,6 +543,8 @@ export interface PlannedReaction {
   maxUses: number;
   uses: number;
   status: "draft" | "committed" | "resolved" | "expired" | "cancelled";
+  fallbackRoute?: string[];
+  lossThreshold?: number;
 }
 
 export interface SidePlan {
@@ -488,14 +555,83 @@ export interface SidePlan {
   committedAt?: number;
 }
 
+export type ContactType =
+  | "MEETING_ENGAGEMENT"
+  | "HASTY_ATTACK"
+  | "PREPARED_ATTACK"
+  | "DELAYING_ACTION"
+  | "PURSUIT"
+  | "BLOCKED_ROUTE"
+  | "ATTACK";
+
 export interface ContactState {
   id: string;
   hexId: string;
   entityIds: string[];
-  type: "MEETING_ENGAGEMENT" | "ATTACK" | "BLOCKED_ROUTE";
+  type: ContactType;
   impulse: number;
   detectedBy: Side[];
   resolved: boolean;
+  attackerSide?: Side;
+  participantIds?: string[];
+  supportIds?: string[];
+  reserveIds?: string[];
+  createdAtImpulse?: number;
+  status?: "detected" | "forming" | "ready" | "resolving" | "resolved" | "cancelled";
+  resolutionId?: string;
+  sourceOrderIds?: string[];
+}
+
+export interface TemporaryCommandEffect {
+  id: string;
+  targetHqId: string;
+  commandPointModifier: number;
+  initiativeModifier: number;
+  withdrawalDelayModifier?: number;
+  startsAtTurn: number;
+  expiresAfterTurn: number;
+}
+
+export interface ScoreChange {
+  side: Side;
+  category: keyof SideScore;
+  points: number;
+  eventId: string;
+}
+
+export interface ImpulseReport {
+  impulse: number;
+  label: string;
+  eventStartIndex: number;
+  eventEndIndex: number;
+  progressedOrderIds: string[];
+  completedOrderIds: string[];
+  failedOrderIds: string[];
+  contactIds: string[];
+  combatIds: string[];
+}
+
+export interface DailyAfterActionReport {
+  turn: number;
+  date: string;
+  impulses: ImpulseReport[];
+  combats: CombatResolution[];
+  destroyedUnits: string[];
+  damagedUnits: string[];
+  capturedObjectives: string[];
+  bridgesDestroyed: string[];
+  commandFailures: string[];
+  supplyChanges: string[];
+  scoreChanges: ScoreChange[];
+  orderSummary: Record<
+    Side,
+    Array<{
+      orderId: string;
+      orderType: PlannedOrderType;
+      status: PlannedOrder["status"];
+      visible: boolean;
+    }>
+  >;
 }
 
 export interface SupplySource {
@@ -590,9 +726,31 @@ export type GameEvent =
   | { type: "PLANS_LOCKED" }
   | { type: "ORDER_DELAYED"; orderId: string; untilImpulse: number; reasons: string[] }
   | { type: "ORDER_FAILED"; orderId: string; reason: string }
+  | { type: "ORDER_PROGRESS"; orderId: string; status: PlannedOrder["status"]; reason?: string }
+  | { type: "ORDER_BLOCKED"; orderId: string; hexId: string; reason: string }
+  | { type: "ORDER_COMPLETED"; orderId: string; orderType: PlannedOrderType }
   | { type: "IMPULSE_STARTED"; impulse: number; label: string }
+  | { type: "IMPULSE_COMPLETED"; impulse: number }
   | { type: "MEETING_ENGAGEMENT"; contactId: string; hexId: string; entityIds: string[] }
+  | { type: "CONTACT_CREATED"; contactId: string; contactType: ContactType; hexId: string }
+  | { type: "CONTACT_RESOLVED"; contactId: string; resolutionId: string }
+  | { type: "COMBAT_RESOLVED"; combatId: string; contactId?: string; outcome: CombatResolution["outcome"] }
+  | { type: "AMMUNITION_SPENT"; unitId: string; amount: number }
+  | { type: "FUEL_CRITICAL"; unitId: string }
+  | { type: "UNIT_HALTED_NO_FUEL"; unitId: string; orderId: string }
+  | { type: "ADVANCE_AFTER_COMBAT"; unitId: string; to: string; contactId: string }
+  | { type: "BREAKTHROUGH_CONTINUED"; orderId: string; unitId: string }
+  | { type: "ADVANCE_HALTED"; orderId: string; reason: string }
+  | { type: "DELAYING_ACTION_STARTED"; contactId: string; unitIds: string[] }
+  | { type: "ENEMY_ADVANCE_DELAYED"; orderId: string; untilImpulse: number }
+  | { type: "DELAYING_FORCE_WITHDREW"; unitId: string; path: string[] }
+  | { type: "DELAYING_FORCE_PINNED"; unitId: string }
+  | { type: "RESERVE_COMMITTED"; orderId: string; contactId: string; unitIds: string[] }
+  | { type: "PONTOON_COMPLETED"; orderId: string; hexId: string; edge: number }
+  | { type: "RECOVERY_PROGRESS"; orderId: string; unitId: string; organizationGained: number }
+  | { type: "REACTION_FAILED"; reactionId: string; reason: string }
   | { type: "REACTION_TRIGGERED"; reactionId: string }
+  | { type: "AFTER_ACTION_REPORT_CREATED"; turn: number }
   | { type: "EFFECT_EXPIRED"; effectId: string; entityId?: string };
 
 export interface GameState {
@@ -642,6 +800,10 @@ export interface GameState {
   scoreEventIds: string[];
   processedCommandIds: string[];
   preparedBridgeDemolitions: Record<string, { side: Side; preparedById?: string }>;
+  temporaryCommandEffects: TemporaryCommandEffect[];
+  impulseReports: ImpulseReport[];
+  combatResolutions: CombatResolution[];
+  afterActionReport?: DailyAfterActionReport;
 }
 
 export interface CommandValidationError {

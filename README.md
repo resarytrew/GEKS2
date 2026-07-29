@@ -1,4 +1,4 @@
-# Baltic Front 1941 — Prototype v0.3 WEGO Core
+# Baltic Front 1941 — Prototype v0.4 WEGO Execution
 
 Детерминированный оперативный варгейм-прототип о первых днях боёв в
 Прибалтике летом 1941 года. Основной режим — локальный hotseat с одновременным
@@ -76,5 +76,14 @@ npm run build
 `x-local-match-token`; полноценным multiplayer-сервером этот адаптер не
 является.
 
-Версии сохранения: `schemaVersion: 3`, `engineVersion: 0.3.0`,
-`scenarioVersion: 0.3.0`.
+Версии сохранения: `schemaVersion: 4`, `engineVersion: 0.4.0`,
+`scenarioVersion: 0.4.0`.
+
+## Документация v0.4
+
+- [Исполнение приказов](docs/ORDER_EXECUTION_MODEL.md)
+- [Разрешение контактов](docs/CONTACT_RESOLUTION_MODEL.md)
+- [Поток боя](docs/COMBAT_FLOW_v0.4.md)
+- [After Action Report](docs/AFTER_ACTION_REPORT.md)
+- [Миграция v0.3 → v0.4](docs/MIGRATION_v0.3_to_v0.4.md)
+- [Проверка v0.4](docs/VERIFICATION_v0.4.md)
