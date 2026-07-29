@@ -24,4 +24,9 @@ support, heavy armor, HQ/engineer/bridge fixture, AAR и deterministic replay.
   5 combat resolutions;
 - TypeScript, ESLint и production build: успешно.
 
-CI URL фиксируется после публикации ветки.
+GitHub Actions для implementation commit `accd8ef`:
+
+- [push run 30486867974](https://github.com/resarytrew/GEKS2/actions/runs/30486867974) —
+  успешно;
+- [pull request run 30486906594](https://github.com/resarytrew/GEKS2/actions/runs/30486906594) —
+  успешно.
