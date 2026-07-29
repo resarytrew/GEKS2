@@ -35,32 +35,32 @@ export interface RenderUI {
 }
 
 const C = {
-  paper: "#e9e2cd",
-  clear: "#e6dfc8",
-  forest: "#9db58a",
-  dforest: "#6f8d63",
-  swamp: "#bdb487",
-  city: "#cdbb93",
-  mcity: "#a8915f",
-  fort: "#c9b284",
-  coast: "#e3d8bc",
-  lake: "#9fb6c9",
-  sea: "#7d99b1",
-  river: "#5f86a0",
-  road: "#bd9f64",
-  mroad: "#7e6235",
-  rail: "#2f2823",
-  ger: "#4a5970",
-  gerDark: "#222b39",
-  gerText: "#eef2f8",
-  gerAccent: "#9db4d6",
-  sov: "#8a3b32",
-  sovDark: "#3d160f",
-  sovText: "#f4e8d6",
-  sovAccent: "#d2a85a",
-  gold: "#c9a24b",
-  grid: "rgba(60,52,38,0.22)",
-  gridStrong: "rgba(50,42,30,0.45)",
+  paper: "#d9d0b8",
+  clear: "#dbd1b7",
+  forest: "#84916a",
+  dforest: "#617454",
+  swamp: "#afa77c",
+  city: "#c3af84",
+  mcity: "#9f8653",
+  fort: "#bd9e6d",
+  coast: "#d7c9ab",
+  lake: "#99afbb",
+  sea: "#819caf",
+  river: "#607f95",
+  road: "#ab8950",
+  mroad: "#76572d",
+  rail: "#39362d",
+  ger: "#596d7a",
+  gerDark: "#2d3c43",
+  gerText: "#f6f0df",
+  gerAccent: "#bdd0d4",
+  sov: "#91483d",
+  sovDark: "#57271f",
+  sovText: "#f8edd9",
+  sovAccent: "#e1c68a",
+  gold: "#9d742d",
+  grid: "rgba(63,59,46,0.22)",
+  gridStrong: "rgba(59,55,42,0.45)",
 };
 
 const terrainFill = (t: HexState["terrain"]): string => {
@@ -442,7 +442,7 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   const accent = u.side === "germany" ? C.gerAccent : C.sovAccent;
   const x0 = x - w / 2;
   const y0 = y - hgt / 2;
-  const r = 3;
+  const r = 1.25;
 
   // Shadow
   ctx.fillStyle = "rgba(0,0,0,0.35)";

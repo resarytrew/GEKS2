@@ -100,16 +100,16 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-staff-bg text-staff-ink">
-      <div className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
-        <header className="overflow-hidden rounded-xl border border-staff-edge bg-gradient-to-br from-staff-panel to-staff-void p-8 shadow-xl">
-          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-staff-gold">
-            <span className="h-px w-8 bg-staff-gold/60" /> Baltic Front 1941
+    <div className="min-h-screen w-full overflow-y-auto bg-staff-bg text-staff-ink">
+      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-10">
+        <header className="field-sheet relative overflow-hidden border-y-4 border-staff-void px-6 py-8 sm:px-10">
+          <div className="flex items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.22em] text-staff-ink-dim">
+            <span className="h-px w-10 bg-staff-ink-dim" /> Оперативное досье № 01 · Baltic Front 1941
           </div>
-          <h1 className="mt-3 font-dispatch text-4xl leading-tight text-staff-ink sm:text-5xl">
+          <h1 className="mt-4 max-w-3xl font-dispatch text-4xl leading-[.95] text-staff-ink sm:text-6xl">
             Северо-Западный фронт:<br />Прибалтика 1941
           </h1>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-staff-ink-dim">
+          <p className="mt-4 max-w-2xl border-l-2 border-staff-gold pl-4 text-sm leading-relaxed text-staff-ink-dim">
             Исторический операционный варгейм о Прибалтийской оборонительной операции
             ({SCENARIO.period}). {SCENARIO.scale}. Два игрока принимают решения на уровне
             дивизий и корпусов: управляют снабжением и штабами, организуют прорывы и
@@ -119,13 +119,13 @@ export default function HomePage() {
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               onClick={startNew}
-              className="rounded-lg bg-staff-gold px-6 py-3 text-sm font-bold uppercase tracking-wider text-staff-void shadow-lg transition hover:brightness-110"
+              className="border border-[#72521d] bg-staff-gold px-6 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-staff-void transition hover:brightness-110"
             >
-              Новая партия · hot-seat ▶
+              Начать кампанию · hot-seat
             </button>
             <a
               href="#modes"
-              className="rounded-lg border border-staff-edge px-6 py-3 text-sm uppercase tracking-wider text-staff-ink-dim transition hover:border-staff-edge2 hover:text-staff-ink"
+              className="border border-staff-edge px-6 py-3 text-[11px] uppercase tracking-[0.12em] text-staff-ink-dim transition hover:border-staff-edge2 hover:text-staff-ink"
             >
               Режимы игры
             </a>
@@ -133,8 +133,8 @@ export default function HomePage() {
         </header>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <section className="rounded-xl border border-staff-edge bg-staff-panel p-5 lg:col-span-2">
-            <h2 className="font-dispatch text-lg text-staff-gold">Сохранённые партии</h2>
+          <section className="field-sheet border-t-4 border-staff-void p-5 lg:col-span-2">
+            <h2 className="sheet-title pb-2 font-dispatch text-xl text-staff-ink">Журнал кампаний</h2>
             <p className="mt-1 text-[11px] text-staff-mute">Каждая партия хранится как детерминированный журнал команд — повтор полностью воспроизводим.</p>
             <div className="mt-4 flex flex-col gap-2">
               {list.length === 0 && (
@@ -143,7 +143,7 @@ export default function HomePage() {
                 </div>
               )}
               {list.map((m) => (
-                <div key={m.id} className="flex items-center gap-3 rounded-lg border border-staff-edge bg-staff-panel2/50 px-4 py-3">
+                <div key={m.id} className="flex items-center gap-3 border-y border-staff-edge bg-staff-panel2/50 px-4 py-3">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm text-staff-ink">{m.name}</div>
                     <div className="text-[10px] text-staff-mute">
@@ -154,7 +154,7 @@ export default function HomePage() {
                   <button
                     onClick={() => resume(m)}
                     disabled={loadingId === m.id}
-                    className="rounded bg-staff-panel2 px-3 py-1.5 text-[11px] uppercase tracking-wider text-staff-ink-dim hover:text-staff-ink disabled:opacity-50"
+                    className="border border-staff-edge bg-staff-panel2 px-3 py-1.5 text-[10px] uppercase tracking-wider text-staff-ink-dim hover:border-staff-edge2 hover:text-staff-ink disabled:opacity-50"
                   >
                     {loadingId === m.id ? "…" : "Продолжить"}
                   </button>
@@ -164,8 +164,8 @@ export default function HomePage() {
             </div>
           </section>
 
-          <section id="modes" className="rounded-xl border border-staff-edge bg-staff-panel p-5">
-            <h2 className="font-dispatch text-lg text-staff-gold">Режимы</h2>
+          <section id="modes" className="field-sheet border-t-4 border-staff-void p-5">
+            <h2 className="sheet-title pb-2 font-dispatch text-xl text-staff-ink">Состав досье</h2>
             <div className="mt-3 flex flex-col gap-2 text-[12px]">
               <ModeRow label="Hot-seat на одном ПК" active>Доступен</ModeRow>
               <ModeRow label="Соревновательная партия">Основа готова · сеть в разработке</ModeRow>
@@ -180,8 +180,8 @@ export default function HomePage() {
           </section>
         </div>
 
-        <section className="rounded-xl border border-staff-edge bg-staff-panel/60 p-5 text-[12px] leading-relaxed text-staff-ink-dim">
-          <h2 className="font-dispatch text-base text-staff-ink">Образовательный замысел</h2>
+        <section className="field-sheet border-l-4 border-staff-gold p-5 text-[12px] leading-relaxed text-staff-ink-dim">
+          <h2 className="font-dispatch text-lg text-staff-ink">Редакционная помета</h2>
           <p className="mt-2">
             Игрок оказывается внутри оперативной обстановки лета 1941 года и принимает решения,
             сопоставимые с решениями командующих. Германия соревнуется со временем и снабжением;
