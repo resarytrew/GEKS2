@@ -6,7 +6,7 @@ import { EVENTS, SCENARIO } from "@/scenarios/baltic-1941/scenario";
 import { SIDE_SHORT, ordinalTurn } from "@/lib/labels";
 import type { GameEvent } from "@/engine/types";
 import { Icon } from "@/components/Icon";
-import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/engine/presentation";
+import { getVisibleEventLog, ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/engine/presentation";
 import { sanitizeStateForSide } from "@/engine/wego";
 
 export default function Modals() {
@@ -246,7 +246,7 @@ function Objectives() {
 
 function Log() {
   const state = useGame((s) => s.state)!;
-  const log = state.eventLog.slice(-90).reverse();
+  const log = getVisibleEventLog(state, state.activeSide).slice(-90).reverse();
   return (
     <>
       <Header title="Журнал действий" sub="Хроника партии (детерминированная лента событий)" />
