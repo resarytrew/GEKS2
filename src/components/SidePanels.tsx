@@ -1,45 +1,56 @@
 "use client";
 
+import { useState, type ReactNode } from "react";
 import { useGame, unitsAt } from "@/store/gameStore";
 import { COMMANDERS, SOURCES } from "@/scenarios/baltic-1941/scenario";
+import OrderPlanningPanel from "@/components/OrderPlanningPanel";
+import ExecutionPanel from "@/components/ExecutionPanel";
+import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/engine/presentation";
+import { SupplyMark } from "@/components/SupplyMark";
+import type { OperationalTab } from "@/lib/operationalSheet";
 import {
   COMMAND_LABEL,
   ECHELON_LABEL,
-  SUPPLY_COLOR,
   SUPPLY_LABEL,
   TERRAIN_LABEL,
   UNIT_TYPE_LABEL,
 } from "@/lib/labels";
 import type { UnitState } from "@/engine/types";
 
-export default function SidePanels() {
+export default function SidePanels({
+  tab: controlledTab,
+  onTabChange,
+}: {
+  tab?: OperationalTab;
+  onTabChange?: (tab: OperationalTab) => void;
+}) {
   const state = useGame((s) => s.state);
   const selectedHexId = useGame((s) => s.selectedHexId);
   const selectedUnitIds = useGame((s) => s.selectedUnitIds);
   const toggle = useGame((s) => s.toggleUnitInSelection);
-  if (!state || !selectedHexId) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-6 text-center text-staff-mute">
-        <div className="font-dispatch text-lg text-staff-ink-dim">Штабная карта</div>
-        <p className="mt-2 text-xs leading-relaxed">
-          Выберите гекс, чтобы изучить местность. Выберите своё соединение, чтобы увидеть
-          доступные маршруты. Кликните по достижимому гексу — для движения, по
-          противнику — для атаки.
-        </p>
-      </div>
-    );
-  }
-  const hex = state.hexes[selectedHexId];
-  if (!hex) return null;
-  const stack = unitsAt(state, selectedHexId);
+  const [internalTab, setInternalTab] = useState<OperationalTab>("inspect");
+  const tab = controlledTab ?? internalTab;
+  const setTab = onTabChange ?? setInternalTab;
+  if (!state) return null;
+  const hex = selectedHexId ? state.hexes[selectedHexId] : null;
+  const stack = hex ? unitsAt(state, selectedHexId!) : [];
   const inspectedId = selectedUnitIds[0] ?? stack[0]?.id;
   const inspected = inspectedId ? state.units[inspectedId] : undefined;
 
   return (
-    <div className="staff-scroll flex h-full flex-col gap-3 overflow-y-auto p-3">
+    <div className="flex h-full flex-col">
+      <div className="flex border-b-2 border-[#77715e] bg-[#e2d6b9]" role="tablist" aria-label="Оперативный лист">
+        <SheetTab active={tab === "inspect"} onClick={() => setTab("inspect")}>Осмотр</SheetTab>
+        <SheetTab active={tab === "orders"} onClick={() => setTab("orders")}>Приказы</SheetTab>
+        <SheetTab active={tab === "situation"} onClick={() => setTab("situation")}>Обстановка</SheetTab>
+      </div>
+      {tab === "orders" ? <OrdersSheet /> : tab === "situation" ? <SituationSheet /> : !hex ? (
+        <div className="flex h-full flex-col items-center justify-center p-6 text-center text-staff-mute"><div className="font-dispatch text-lg text-staff-ink">Оперативный лист</div><p className="mt-2 text-xs leading-relaxed">Выберите гекс, чтобы изучить местность. Выберите своё соединение, чтобы увидеть доступные маршруты и создать приказ.</p></div>
+      ) : (
+      <div className="staff-scroll flex h-full flex-col gap-3 overflow-y-auto p-3">
       <HexInfo />
       {stack.length > 0 && (
-        <section className="rounded border border-staff-edge bg-staff-panel2/60 p-2.5">
+        <section className="border border-staff-edge bg-staff-panel2/60 p-2.5">
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-staff-mute">
             Стек соединений ({stack.length})
           </h3>
@@ -61,9 +72,30 @@ export default function SidePanels() {
         </section>
       )}
       {inspected && <UnitInspector unit={inspected} />}
+      </div>
+      )}
     </div>
   );
 }
+
+function SheetTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return <button role="tab" aria-selected={active} onClick={onClick} className={`flex-1 border-b-2 px-2 py-3 text-[9px] font-bold uppercase tracking-[.1em] ${active ? "border-staff-gold text-staff-ink" : "border-transparent text-staff-mute hover:text-staff-ink"}`}>{children}</button>;
+}
+
+function OrdersSheet() {
+  const state = useGame((s) => s.state)!;
+  const remove = useGame((s) => s.dispatch);
+  const orders = state.plans[state.activeSide].orders;
+  return <div className="staff-scroll h-full overflow-y-auto p-3"><div className="sheet-title pb-2 font-dispatch text-lg">Приказы · {state.activeSide === "germany" ? "Германия" : "СССР"}</div><OrderPlanningPanel /><p className="mt-2 text-[11px] leading-relaxed text-staff-ink-dim">{orders.length ? "Статус приказов берётся из плана движка." : "Черновиков нет. Выберите свои соединения и укажите достижимый гекс на карте."}</p><div className="mt-3 space-y-2">{orders.map((order) => <article key={order.id} className="border-l-2 border-staff-gold bg-staff-panel2/50 p-2"><div className="flex items-start justify-between gap-2"><div><b className="text-[11px] text-staff-ink">{ORDER_TYPE_LABELS[order.orderType]}</b><div className="mt-1 text-[10px] text-staff-ink-dim">{order.entityIds.map((id) => state.units[id]?.shortName ?? id).join(", ")}</div></div><span className="text-[9px] uppercase tracking-wide text-staff-mute">{ORDER_STATUS_LABELS[order.status]}</span></div>{order.delayReasons?.length ? <p className="mt-1 text-[10px] text-staff-mute">{order.delayReasons.join("; ")}</p> : null}{order.status === "draft" && <button onClick={() => remove({ type: "REMOVE_PLANNED_ORDER", side: state.activeSide, plannedOrderId: order.id })} className="mt-2 border border-staff-edge px-2 py-1 text-[9px] uppercase tracking-wide text-staff-ink-dim hover:border-staff-edge2">Отменить черновик</button>}</article>)}</div></div>;
+}
+
+function SituationSheet() {
+  const state = useGame((s) => s.state)!;
+  const setPanel = useGame((s) => s.setPanel);
+  const objectives = state.objectives.filter((objective) => objective.side === state.activeSide && objective.status === "active");
+  return <div className="staff-scroll h-full overflow-y-auto p-3"><div className="sheet-title pb-2 font-dispatch text-lg">Оперативная обстановка</div><ExecutionPanel /><div className="mt-3 border-l-2 border-staff-gold pl-3"><div className="text-[9px] font-bold uppercase tracking-[.12em] text-staff-mute">Текущий этап</div><p className="mt-1 text-[11px] leading-relaxed text-staff-ink-dim">{state.phase === "planning" ? "Составьте и подтвердите приказы. Противник их не увидит." : "Следуйте указанию фазовой ленты; результаты определяются движком."}</p></div><div className="mt-4"><div className="text-[9px] font-bold uppercase tracking-[.12em] text-staff-mute">Активные цели</div>{objectives.slice(0, 3).map((objective) => <p className="mt-2 text-[11px] text-staff-ink-dim" key={objective.id}>{objective.description} <b className="tabular text-staff-ink">{objective.points}</b></p>)}</div><button onClick={() => setPanel("log")} className="mt-4 border border-staff-edge px-3 py-2 text-[10px] font-bold uppercase tracking-[.1em] text-staff-ink-dim hover:border-staff-edge2">Открыть журнал</button></div>;
+}
+
 
 function HexInfo() {
   const state = useGame((s) => s.state)!;
@@ -99,7 +131,7 @@ function HexInfo() {
           <span className="text-staff-mute">Переправы: </span>
           {bridges.map((b, i) => (
             <span key={i} className="mr-2">
-              {b.state === "intact" ? "🟎 мост" : b.state === "destroyed" ? "✕ разрушен" : b.state === "pontoon" ? "≈ понтон" : "⌗ повреждён"}
+              {b.state === "intact" ? "мост исправен" : b.state === "destroyed" ? "мост разрушен" : b.state === "pontoon" ? "понтонная переправа" : "мост повреждён"}
             </span>
           ))}
         </div>
@@ -180,7 +212,7 @@ function UnitInspector({ unit }: { unit: UnitState }) {
         <div>
           <span className="text-[9px] uppercase tracking-wider text-staff-mute">Снабжение</span>
           <div className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ background: SUPPLY_COLOR[unit.supplyState] }} />
+            <SupplyMark state={unit.supplyState} className="h-3.5 w-3.5" />
             <span className="text-staff-ink-dim">{SUPPLY_LABEL[unit.supplyState]}</span>
           </div>
         </div>

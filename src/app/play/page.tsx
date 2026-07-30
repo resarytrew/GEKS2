@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useGame } from "@/store/gameStore";
 import GameMap from "@/components/GameMap";
 import TopBar from "@/components/TopBar";
-import SidePanels from "@/components/SidePanels";
+import OperationalSheet from "@/components/OperationalSheet";
 import BottomBar from "@/components/BottomBar";
 import CombatPanel from "@/components/CombatPanel";
 import Modals from "@/components/Modals";
 import Toasts from "@/components/Toasts";
-import OrderPlanningPanel from "@/components/OrderPlanningPanel";
-import ExecutionPanel from "@/components/ExecutionPanel";
+import ToolRail from "@/components/ToolRail";
+import MobileToolSheet from "@/components/MobileToolSheet";
 import { SIDE_SHORT } from "@/lib/labels";
 import type { Side } from "@/engine/types";
 
@@ -24,20 +24,49 @@ export default function PlayPage() {
   const attackTargetHexId = useGame((s) => s.attackTargetHexId);
   const selectHex = useGame((s) => s.selectHex);
   const setPanel = useGame((s) => s.setPanel);
+  const openPanel = useGame((s) => s.openPanel);
   const saveProgress = useGame((s) => s.saveProgress);
   const [showZOC, setShowZOC] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [handoffAcknowledgedFor, setHandoffAcknowledgedFor] = useState<Side | null>(null);
 
-  const onSave = async () => {
+  const onSave = useCallback(async () => {
     setSaving(true);
     await saveProgress();
     setSaving(false);
-  };
+  }, [saveProgress]);
 
   useEffect(() => {
     if (!state) router.replace("/");
   }, [state, router]);
+
+  const handoffPendingSide = state?.phase === "planning" && state.plans.germany.committed !== state.plans.ussr.committed ? state.activeSide : null;
+
+  useEffect(() => {
+    if (!handoffPendingSide) return;
+    // Remove the previous player's transient context before the sealed screen is visible.
+    useGame.getState().clearSelection();
+    useGame.getState().setPanel(null);
+  }, [handoffPendingSide]);
+
+  useEffect(() => {
+    const shortcuts = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (event.ctrlKey || event.metaKey || event.altKey || target?.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")) return;
+      const key = event.key.toLowerCase();
+      if (key === "m") setShowZOC((value) => !value);
+      if (key === "l") setPanel("log");
+      if (key === "o") setPanel("objectives");
+      if (key === "s") { event.preventDefault(); void onSave(); }
+      if (key === "escape") {
+        if (openPanel) setPanel(null);
+        else useGame.getState().clearSelection();
+      }
+    };
+    window.addEventListener("keydown", shortcuts);
+    return () => window.removeEventListener("keydown", shortcuts);
+  }, [onSave, openPanel, setPanel]);
 
   if (!state) {
     return (
@@ -56,15 +85,16 @@ export default function PlayPage() {
     <div className="flex h-screen flex-col overflow-hidden bg-staff-bg">
       <TopBar />
       <div className="relative flex min-h-0 flex-1">
-        <div className="flex w-10 shrink-0 flex-col items-center gap-1 border-r border-staff-edge bg-staff-panel py-2">
-          <ToolButton title="Справка" onClick={() => setPanel("help")}>?</ToolButton>
-          <ToolButton title="Цели" onClick={() => setPanel("objectives")}>★</ToolButton>
-          <ToolButton title="Журнал" onClick={() => setPanel("log")}>≡</ToolButton>
-          <ToolButton title="Зоны контроля" active={showZOC} onClick={() => setShowZOC((v) => !v)}>⊙</ToolButton>
-          <ToolButton title="Сохранить партию" onClick={onSave}>{saving ? "…" : "💾"}</ToolButton>
-          <div className="mt-auto" />
-          <ToolButton title="Сводка" onClick={() => setPanel("report")}>▥</ToolButton>
-        </div>
+        <ToolRail
+          showZOC={showZOC}
+          saving={saving}
+          onHelp={() => setPanel("help")}
+          onObjectives={() => setPanel("objectives")}
+          onLog={() => setPanel("log")}
+          onReport={() => setPanel("report")}
+          onToggleZOC={() => setShowZOC((value) => !value)}
+          onSave={() => void onSave()}
+        />
 
         <main className="relative min-w-0 flex-1">
           <GameMap
@@ -77,17 +107,21 @@ export default function PlayPage() {
             activeSide={state.activeSide}
             onHexClick={selectHex}
           />
+          <MobileToolSheet
+            open={mobileToolsOpen && !handoffPendingSide}
+            showZOC={showZOC}
+            saving={saving}
+            onToggle={() => setMobileToolsOpen((value) => !value)}
+            onHelp={() => setPanel("help")}
+            onObjectives={() => setPanel("objectives")}
+            onLog={() => setPanel("log")}
+            onReport={() => setPanel("report")}
+            onToggleZOC={() => setShowZOC((value) => !value)}
+            onSave={() => void onSave()}
+          />
         </main>
 
-        <aside className="hidden w-[360px] shrink-0 flex-col overflow-hidden border-l border-staff-edge bg-staff-bg md:flex">
-          <div className="staff-scroll max-h-[62%] shrink-0 overflow-y-auto">
-            <OrderPlanningPanel />
-            <ExecutionPanel />
-          </div>
-          <div className="min-h-0 flex-1">
-            <SidePanels />
-          </div>
-        </aside>
+        <OperationalSheet key={`sheet:${state.activeSide}`} selectedHexId={selectedHexId} hasSelectedUnits={selectedUnitIds.length > 0} />
       </div>
       <BottomBar />
       <CombatPanel />
@@ -97,10 +131,10 @@ export default function PlayPage() {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-staff-void/95 p-6">
           <div className="max-w-md border border-staff-edge bg-staff-panel p-8 text-center shadow-2xl">
             <div className="text-xs uppercase tracking-[0.25em] text-staff-gold">
-              Передача устройства
+              План запечатан
             </div>
             <h2 className="mt-4 font-dispatch text-2xl text-staff-ink">
-              План первой стороны скрыт
+              Передайте управление следующей стороне
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-staff-mute">
               Передайте устройство игроку стороны «{SIDE_SHORT[state.activeSide]}».
@@ -108,9 +142,9 @@ export default function PlayPage() {
             </p>
             <button
               className="mt-6 border border-staff-gold bg-staff-gold px-5 py-2 text-sm font-semibold text-staff-void"
-              onClick={() => setHandoffAcknowledgedFor(state.activeSide)}
+              onClick={() => { setMobileToolsOpen(false); setHandoffAcknowledgedFor(state.activeSide); }}
             >
-              Устройство передано
+              Продолжить за {SIDE_SHORT[state.activeSide]}
             </button>
           </div>
         </div>
@@ -119,26 +153,3 @@ export default function PlayPage() {
   );
 }
 
-function ToolButton({
-  children,
-  title,
-  onClick,
-  active,
-}: {
-  children: React.ReactNode;
-  title: string;
-  onClick: () => void;
-  active?: boolean;
-}) {
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      className={`flex h-8 w-8 items-center justify-center rounded text-sm ${
-        active ? "bg-staff-gold text-staff-void" : "text-staff-mute hover:bg-staff-panel2 hover:text-staff-ink"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

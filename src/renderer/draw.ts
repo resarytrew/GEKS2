@@ -2,14 +2,17 @@
  * Canvas 2D renderer for the staff map. Kept entirely separate from the game
  * engine: it only READS GameState and draws it. The engine never imports this.
  *
- * Performance: every frame culls to hexes inside the viewport, so hovering or
- * selecting never iterates the whole multi-thousand-hex map. Static geography
- * is drawn into an offscreen layer that is only rebuilt when the viewport or
- * map content changes; selection / hover only repaint the dynamic layer.
+ * Performance: rendering uses a viewport-filtered set of hexes. The current
+ * filter is an honest full-map scan before filtering, not a spatial index;
+ * selection and hover then draw only the filtered set. Static geography is
+ * drawn into an offscreen layer and selection / hover repaint only dynamic UI.
  */
 
-import type { GameState, HexState, UnitState, Side } from "@/engine/types";
+import type { GameState, HexState, PlannedOrder, UnitState, Side } from "@/engine/types";
 import { axialToPixel, edgeMidpoint, hexCorners, HEX_SIZE, neighbors, pixelToAxial, sharedEdge, type Axial } from "@/engine/hex";
+import { hiddenStackCount, MAX_VISIBLE_STACK_COUNTERS, orderRouteStyle, SUPPLY_MARK_SHAPES } from "@/renderer/presentation";
+import { normalizeRiverEdges } from "@/renderer/rivers";
+import { positionOrderMarker } from "@/renderer/orderMarkers";
 
 export interface Viewport {
   scale: number;
@@ -34,33 +37,40 @@ export interface RenderUI {
   activeSide: Side;
 }
 
+/** Single source of truth for visual detail thresholds. */
+export const MAP_LOD = {
+  far: 0.5,
+  medium: 0.7,
+  close: 0.95,
+} as const;
+
 const C = {
-  paper: "#e9e2cd",
-  clear: "#e6dfc8",
-  forest: "#9db58a",
-  dforest: "#6f8d63",
-  swamp: "#bdb487",
-  city: "#cdbb93",
-  mcity: "#a8915f",
-  fort: "#c9b284",
-  coast: "#e3d8bc",
-  lake: "#9fb6c9",
-  sea: "#7d99b1",
-  river: "#5f86a0",
-  road: "#bd9f64",
-  mroad: "#7e6235",
-  rail: "#2f2823",
-  ger: "#4a5970",
-  gerDark: "#222b39",
-  gerText: "#eef2f8",
-  gerAccent: "#9db4d6",
-  sov: "#8a3b32",
-  sovDark: "#3d160f",
-  sovText: "#f4e8d6",
-  sovAccent: "#d2a85a",
-  gold: "#c9a24b",
-  grid: "rgba(60,52,38,0.22)",
-  gridStrong: "rgba(50,42,30,0.45)",
+  paper: "#d9d0b8",
+  clear: "#dbd1b7",
+  forest: "#84916a",
+  dforest: "#617454",
+  swamp: "#afa77c",
+  city: "#c3af84",
+  mcity: "#9f8653",
+  fort: "#bd9e6d",
+  coast: "#d7c9ab",
+  lake: "#99afbb",
+  sea: "#819caf",
+  river: "#607f95",
+  road: "#ab8950",
+  mroad: "#76572d",
+  rail: "#39362d",
+  ger: "#596d7a",
+  gerDark: "#2d3c43",
+  gerText: "#f6f0df",
+  gerAccent: "#bdd0d4",
+  sov: "#91483d",
+  sovDark: "#57271f",
+  sovText: "#f8edd9",
+  sovAccent: "#e1c68a",
+  gold: "#9d742d",
+  grid: "rgba(63,59,46,0.22)",
+  gridStrong: "rgba(59,55,42,0.45)",
 };
 
 const terrainFill = (t: HexState["terrain"]): string => {
@@ -118,34 +128,6 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
   ctx.fillRect(0, 0, view.width, view.height);
   const detail = vp.scale;
   const ids = visibleHexIds(state, vp, view);
-
-  // Only the current side's plan is rendered. Opponent orders remain hidden
-  // until the engine exposes them through detected contacts.
-  const ownOrders = state.plans[state.activeSide]?.orders ?? [];
-  for (const order of ownOrders) {
-    if (!order.route || order.route.length < 2 || order.status === "cancelled") continue;
-    ctx.strokeStyle =
-      order.status === "delayed"
-        ? "rgba(205,137,62,0.9)"
-        : order.status === "failed"
-          ? "rgba(173,58,48,0.9)"
-          : state.activeSide === "germany"
-            ? "rgba(58,91,132,0.9)"
-            : "rgba(167,51,51,0.9)";
-    ctx.lineWidth = Math.max(2, 2.5 * detail);
-    ctx.setLineDash(order.status === "draft" ? [8, 5] : []);
-    ctx.beginPath();
-    for (let index = 0; index < order.route.length; index++) {
-      const hex = state.hexes[order.route[index]];
-      if (!hex) continue;
-      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
-      const screen = worldToScreen(point.x, point.y, vp);
-      if (index === 0) ctx.moveTo(screen.x, screen.y);
-      else ctx.lineTo(screen.x, screen.y);
-    }
-    ctx.stroke();
-    ctx.setLineDash([]);
-  }
 
   // 1. Terrain fill + control wash
   for (const id of ids) {
@@ -213,19 +195,17 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
   ctx.lineCap = "round";
   ctx.lineWidth = Math.max(1.4, 2.4 * detail);
   ctx.strokeStyle = C.river;
-  for (const id of ids) {
-    const h = state.hexes[id];
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    for (const e of h.riverEdges) {
-      const m = edgeMidpoint(h.q, h.r, e, HEX_SIZE);
-      // short segment across the edge (center -> midpoint) so adjacent hexes connect
-      const from = worldToScreen(p.x + (m.x - p.x) * 0.45, p.y + (m.y - p.y) * 0.45, vp);
-      const to = worldToScreen(m.x, m.y, vp);
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.stroke();
-    }
+  const visible = new Set(ids);
+  for (const river of normalizeRiverEdges(state.hexes)) {
+    if (!visible.has(river.hexId) && (!river.neighborHexId || !visible.has(river.neighborHexId))) continue;
+    const h = state.hexes[river.hexId];
+    const corners = hexCorners(h.q, h.r, HEX_SIZE);
+    const from = worldToScreen(corners[river.edge].x, corners[river.edge].y, vp);
+    const to = worldToScreen(corners[(river.edge + 1) % 6].x, corners[(river.edge + 1) % 6].y, vp);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
   }
 
   // 5. Roads & railways
@@ -300,6 +280,74 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
       ctx.fillText(h.settlement.name, s.x, s.y);
     }
   }
+
+  // 10. Committed orders deliberately sit above opaque geography.
+  drawCommittedOrders(ctx, state, vp, detail);
+}
+
+function drawCommittedOrders(ctx: CanvasRenderingContext2D, state: GameState, vp: Viewport, detail: number): void {
+  // Only the active side plan is rendered; opponent routes remain hidden.
+  const ownOrders = state.plans[state.activeSide]?.orders ?? [];
+  for (const order of ownOrders) {
+    if (order.status === "cancelled") continue;
+    ctx.strokeStyle =
+      order.status === "delayed"
+        ? "rgba(205,137,62,0.9)"
+        : order.status === "failed"
+          ? "rgba(173,58,48,0.9)"
+          : state.activeSide === "germany"
+            ? "rgba(58,91,132,0.9)"
+            : "rgba(167,51,51,0.9)";
+    const style = orderRouteStyle(order);
+    ctx.lineWidth = Math.max(2, (style === "prepared-attack" ? 4 : style === "advance" ? 3 : 2.5) * detail);
+    // Status takes precedence; otherwise the order geometry is recognisable without colour.
+    ctx.setLineDash(order.status === "draft" ? [8, 5] : style === "withdraw" ? [9, 5] : style === "delay" ? [3, 4] : style === "reserve" ? [2, 3] : []);
+    if (order.route && order.route.length >= 2) {
+      ctx.beginPath();
+      for (let index = 0; index < order.route.length; index++) {
+        const hex = state.hexes[order.route[index]];
+        if (!hex) continue;
+        const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+        const screen = worldToScreen(point.x, point.y, vp);
+        if (index === 0) ctx.moveTo(screen.x, screen.y);
+        else ctx.lineTo(screen.x, screen.y);
+      }
+      ctx.stroke();
+    } else {
+      drawPositionOrderMarker(ctx, state, order, vp, detail);
+    }
+    ctx.setLineDash([]);
+  }
+}
+
+function drawPositionOrderMarker(ctx: CanvasRenderingContext2D, state: GameState, order: PlannedOrder, vp: Viewport, detail: number): void {
+  const marker = positionOrderMarker(order);
+  if (!marker) return;
+  const lead = state.units[order.entityIds[0]];
+  const hexId = marker === "engineering" ? order.bridgeHexId : order.targetHexId ?? lead?.hexId;
+  const hex = hexId ? state.hexes[hexId] : undefined;
+  if (!hex) return;
+  let point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+  if (marker === "engineering" && order.bridgeEdge != null) point = edgeMidpoint(hex.q, hex.r, order.bridgeEdge, HEX_SIZE);
+  const screen = worldToScreen(point.x, point.y, vp);
+  const r = Math.max(5, 7 * detail);
+  ctx.save();
+  ctx.lineWidth = Math.max(1.5, 2 * detail);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  if (marker === "attack") {
+    ctx.moveTo(screen.x - r, screen.y + r); ctx.lineTo(screen.x + r, screen.y); ctx.lineTo(screen.x - r, screen.y - r);
+  } else if (marker === "defend") {
+    ctx.arc(screen.x, screen.y, r, Math.PI, 0);
+  } else if (marker === "reserve") {
+    ctx.moveTo(screen.x, screen.y - r); ctx.lineTo(screen.x + r, screen.y); ctx.lineTo(screen.x, screen.y + r); ctx.lineTo(screen.x - r, screen.y); ctx.closePath();
+  } else if (marker === "recover") {
+    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
+  } else {
+    ctx.moveTo(screen.x - r, screen.y); ctx.lineTo(screen.x + r, screen.y); ctx.moveTo(screen.x, screen.y - r); ctx.lineTo(screen.x, screen.y + r);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawEdgeLines(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport, kind: "road" | "major" | "rail"): void {
@@ -417,7 +465,8 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
     return;
   }
 
-  const show = units.slice(0, 4);
+  // Three physical counters remain legible; the count marker represents the rest.
+  const show = units.slice(0, MAX_VISIBLE_STACK_COUNTERS);
   const dx = size * 0.16;
   for (let i = show.length - 1; i >= 0; i--) {
     const u = show[i];
@@ -425,11 +474,12 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
     const oy = (i - (show.length - 1) / 2) * dx;
     drawCounter(ctx, u, center.x + ox, center.y + oy, size, isSel && i === 0);
   }
-  if (units.length > 4) {
+  const hidden = hiddenStackCount(units.length);
+  if (hidden > 0) {
     ctx.fillStyle = "#1a140a";
     ctx.font = `600 ${Math.round(size * 0.26)}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(`+${units.length - 4}`, center.x + size * 0.5, center.y + size * 0.5);
+    ctx.fillText(`+${hidden}`, center.x + size * 0.5, center.y + size * 0.5);
   }
 }
 
@@ -442,7 +492,7 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   const accent = u.side === "germany" ? C.gerAccent : C.sovAccent;
   const x0 = x - w / 2;
   const y0 = y - hgt / 2;
-  const r = 3;
+  const r = 1.25;
 
   // Shadow
   ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -464,11 +514,17 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
     ctx.stroke();
   }
 
-  // HQ stripe
+  // Headquarters have a flag plus a double command rule: readable without colour.
   const isHq = u.echelon === "corps_hq" || u.echelon === "army_hq" || u.echelon === "front_hq";
   if (isHq) {
-    ctx.fillStyle = accent;
-    ctx.fillRect(x0, y0, w, 2.4);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x0 + 1, y0 + 2.5);
+    ctx.lineTo(x0 + w - 1, y0 + 2.5);
+    ctx.moveTo(x0 + 1, y0 + 5);
+    ctx.lineTo(x0 + w - 1, y0 + 5);
+    ctx.stroke();
   }
 
   ctx.textAlign = "center";
@@ -498,14 +554,23 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
     ctx.fill();
   }
 
-  // Supply dot (top-right)
-  const supColor: Record<string, string> = { full: "#7bbf6a", limited: "#d8c24a", low: "#e0a13b", isolated: "#cf5b3a", none: "#9c2f24" };
-  if (size > 22) {
-    ctx.beginPath();
-    ctx.arc(x0 + w - 3, y0 + 3, pipR + 0.5, 0, Math.PI * 2);
-    ctx.fillStyle = supColor[u.supplyState] ?? "#888";
-    ctx.fill();
-  }
+  // Supply is a shape as well as a colour: circle / half circle / triangle / slash / cross.
+  if (size > 22) drawSupplyMark(ctx, u.supplyState, x0 + w - 5, y0 + 5, Math.max(2.5, pipR + 1));
+}
+
+function drawSupplyMark(ctx: CanvasRenderingContext2D, state: UnitState["supplyState"], x: number, y: number, r: number): void {
+  const colors: Record<UnitState["supplyState"], string> = { full: "#5f7d54", limited: "#b59035", low: "#b85b31", isolated: "#a74032", none: "#54251f" };
+  ctx.save();
+  ctx.strokeStyle = colors[state];
+  ctx.fillStyle = colors[state];
+  ctx.lineWidth = 1.3;
+  const shape = SUPPLY_MARK_SHAPES[state];
+  if (shape === "circle") { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+  else if (shape === "half-circle") { ctx.beginPath(); ctx.arc(x, y, r, Math.PI, 0); ctx.lineTo(x + r, y); ctx.closePath(); ctx.fill(); }
+  else if (shape === "triangle") { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r); ctx.lineTo(x - r, y + r); ctx.closePath(); ctx.fill(); }
+  else if (shape === "slash") { ctx.beginPath(); ctx.moveTo(x - r, y + r); ctx.lineTo(x + r, y - r); ctx.stroke(); }
+  else { ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r); ctx.stroke(); }
+  ctx.restore();
 }
 
 function drawSymbol(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: number, size: number, color: string, accent: string): void {
