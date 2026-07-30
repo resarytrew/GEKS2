@@ -35,32 +35,32 @@ export interface RenderUI {
 }
 
 const C = {
-  paper: "#e9e2cd",
-  clear: "#e6dfc8",
-  forest: "#9db58a",
-  dforest: "#6f8d63",
-  swamp: "#bdb487",
-  city: "#cdbb93",
-  mcity: "#a8915f",
-  fort: "#c9b284",
-  coast: "#e3d8bc",
-  lake: "#9fb6c9",
-  sea: "#7d99b1",
-  river: "#5f86a0",
-  road: "#bd9f64",
-  mroad: "#7e6235",
-  rail: "#2f2823",
-  ger: "#4a5970",
-  gerDark: "#222b39",
-  gerText: "#eef2f8",
-  gerAccent: "#9db4d6",
-  sov: "#8a3b32",
-  sovDark: "#3d160f",
-  sovText: "#f4e8d6",
+  paper: "#b7a982",
+  clear: "#73755a",
+  forest: "#4f6447",
+  dforest: "#344832",
+  swamp: "#696543",
+  city: "#806c4c",
+  mcity: "#6b5438",
+  fort: "#8c744f",
+  coast: "#65725d",
+  lake: "#426776",
+  sea: "#243d46",
+  river: "#78a6ba",
+  road: "#a7824b",
+  mroad: "#d0a457",
+  rail: "#1e1a16",
+  ger: "#3f515b",
+  gerDark: "#172227",
+  gerText: "#f0f2ec",
+  gerAccent: "#a9b9b8",
+  sov: "#8d3329",
+  sovDark: "#47150f",
+  sovText: "#f2dfc0",
   sovAccent: "#d2a85a",
-  gold: "#c9a24b",
-  grid: "rgba(60,52,38,0.22)",
-  gridStrong: "rgba(50,42,30,0.45)",
+  gold: "#e0bd65",
+  grid: "rgba(225,205,150,0.075)",
+  gridStrong: "rgba(235,216,166,0.15)",
 };
 
 const terrainFill = (t: HexState["terrain"]): string => {
@@ -111,10 +111,19 @@ function hexPath(ctx: CanvasRenderingContext2D, corners: { x: number; y: number 
   ctx.closePath();
 }
 
+function hash01(q: number, r: number, salt: number): number {
+  const x = Math.sin(q * 127.1 + r * 311.7 + salt * 74.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 /** Static geography: terrain, control wash, front line, rivers, roads, rails. */
 export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState, vp: Viewport, view: View): void {
   ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  ctx.fillStyle = C.sea;
+  const seaGradient = ctx.createLinearGradient(0, 0, view.width, view.height);
+  seaGradient.addColorStop(0, "#31515b");
+  seaGradient.addColorStop(0.52, C.sea);
+  seaGradient.addColorStop(1, "#1a2c33");
+  ctx.fillStyle = seaGradient;
   ctx.fillRect(0, 0, view.width, view.height);
   const detail = vp.scale;
   const ids = visibleHexIds(state, vp, view);
@@ -165,6 +174,27 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
         ctx.fill();
       }
     }
+    if (detail > 0.38 && h.terrain !== "sea" && h.terrain !== "lake") {
+      ctx.save();
+      hexPath(ctx, corners);
+      ctx.clip();
+      ctx.globalAlpha = 0.11;
+      ctx.strokeStyle = h.terrain === "forest" || h.terrain === "dense_forest" ? "#d1c28f" : "#21180e";
+      ctx.lineWidth = Math.max(0.4, 0.75 * detail);
+      for (let n = 0; n < 3; n++) {
+        const nx = p.x + (hash01(h.q, h.r, n) - 0.5) * HEX_SIZE * 1.2;
+        const ny = p.y + (hash01(h.q, h.r, n + 9) - 0.5) * HEX_SIZE * 1.05;
+        const a = hash01(h.q, h.r, n + 17) * Math.PI;
+        const len = HEX_SIZE * (0.18 + hash01(h.q, h.r, n + 27) * 0.28) * detail;
+        const s0 = worldToScreen(nx, ny, vp);
+        ctx.beginPath();
+        ctx.moveTo(s0.x - Math.cos(a) * len, s0.y - Math.sin(a) * len);
+        ctx.lineTo(s0.x + Math.cos(a) * len, s0.y + Math.sin(a) * len);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // 2. Hex grid
@@ -180,10 +210,24 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
       ctx.stroke();
     }
   }
+  if (detail > 0.78) {
+    ctx.font = `${Math.round(6 + 2 * detail)}px ui-monospace, monospace`;
+    ctx.fillStyle = "rgba(238,224,184,0.20)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const id of ids) {
+      const h = state.hexes[id];
+      if (h.terrain === "sea") continue;
+      const p = axialToPixel(h.q, h.r, HEX_SIZE);
+      const s = worldToScreen(p.x, p.y - HEX_SIZE * 0.58, vp);
+      ctx.fillText(`${h.q},${h.r}`, s.x, s.y);
+    }
+  }
 
   // 3. Front line: edges where adjacent control differs.
-  ctx.lineWidth = Math.max(2, 2.6 * detail);
-  ctx.strokeStyle = "rgba(40,30,18,0.5)";
+  ctx.lineWidth = Math.max(2, 2.8 * detail);
+  ctx.strokeStyle = "rgba(198,68,46,0.72)";
+  ctx.setLineDash([5 * Math.max(0.8, detail), 5 * Math.max(0.8, detail)]);
   for (const id of ids) {
     const h = state.hexes[id];
     if (h.terrain === "sea" || h.terrain === "lake") continue;
@@ -208,6 +252,7 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
       }
     }
   }
+  ctx.setLineDash([]);
 
   // 4. Rivers (drawn along edges)
   ctx.lineCap = "round";
@@ -290,14 +335,22 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
     const p = axialToPixel(h.q, h.r, HEX_SIZE);
     const s = worldToScreen(p.x, p.y + HEX_SIZE * 0.62, vp);
     const dotR = imp === "strategic" ? 4 : imp === "major" ? 3.2 : 2.4;
-    ctx.fillStyle = imp === "strategic" || imp === "major" ? "#2c2417" : "#4a3f2a";
+    const cityCenter = worldToScreen(p.x, p.y, vp);
+    ctx.fillStyle = imp === "strategic" || imp === "major" ? "#1a1711" : "#302718";
+    ctx.strokeStyle = "rgba(235,218,170,0.6)";
+    ctx.lineWidth = Math.max(0.8, 1.1 * detail);
     ctx.beginPath();
-    ctx.arc(worldToScreen(p.x, p.y, vp).x, worldToScreen(p.x, p.y, vp).y, dotR * Math.max(0.8, detail), 0, Math.PI * 2);
+    ctx.arc(cityCenter.x, cityCenter.y, dotR * Math.max(0.8, detail), 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     if (detail > 0.62) {
-      ctx.fillStyle = "#241d12";
-      ctx.font = `${imp === "strategic" ? "600 " : ""}${Math.round(10 + 3 * detail)}px 'Iowan Old Style', Georgia, serif`;
-      ctx.fillText(h.settlement.name, s.x, s.y);
+      const label = imp === "strategic" || imp === "major" ? h.settlement.name.toUpperCase() : h.settlement.name;
+      ctx.font = `${imp === "strategic" ? "700 " : "600 "}${Math.round(10 + 3 * detail)}px 'Iowan Old Style', Georgia, serif`;
+      ctx.lineWidth = Math.max(2, 2.4 * detail);
+      ctx.strokeStyle = "rgba(0,0,0,0.72)";
+      ctx.strokeText(label, s.x, s.y);
+      ctx.fillStyle = imp === "strategic" || imp === "major" ? "#f4eedb" : "#d9cfb1";
+      ctx.fillText(label, s.x, s.y);
     }
   }
 }

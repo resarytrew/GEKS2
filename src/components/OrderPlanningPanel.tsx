@@ -130,21 +130,21 @@ export default function OrderPlanningPanel() {
   };
 
   return (
-    <section className="border-b border-staff-edge bg-staff-panel p-3">
+    <section className="border-b border-staff-edge/80 bg-staff-bg/40 p-3">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-dispatch text-base text-staff-ink">План операции</h2>
-          <p className="text-[9px] uppercase tracking-[0.18em] text-staff-mute">
-            скрыто до контакта
+          <h2 className="staff-section-title">Приказы</h2>
+          <p className="mt-1 text-[9px] uppercase tracking-[0.18em] text-staff-mute">
+            Планирование · скрыто до контакта
           </p>
         </div>
-        <span className="rounded border border-staff-edge px-2 py-1 text-[10px] text-staff-mute">
+        <span className="border border-staff-edge px-2 py-1 text-[10px] text-staff-mute">
           {plan.orders.length} приказов
         </span>
       </div>
 
       {plan.committed ? (
-        <p className="mt-3 rounded border border-staff-gold/30 bg-staff-gold/10 p-2 text-[11px] text-staff-gold">
+        <p className="mt-3 border border-staff-gold/30 bg-staff-gold/10 p-2 text-[11px] text-staff-gold">
           План зафиксирован. Передайте устройство второй стороне.
         </p>
       ) : (
@@ -157,7 +157,7 @@ export default function OrderPlanningPanel() {
                 onChange={(event) =>
                   setOrderType(event.target.value as PlannedOrderType)
                 }
-                className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1.5 text-[11px] text-staff-ink"
+                className="mt-1 w-full border border-staff-edge bg-staff-void px-2 py-1.5 text-[11px] text-staff-ink"
               >
                 {Object.entries(ORDER_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
@@ -193,7 +193,7 @@ export default function OrderPlanningPanel() {
                     event.target.value as PlannedOrder["contactPolicy"],
                   )
                 }
-                className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
+                className="mt-1 w-full border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
               >
                 <option value="avoid">избегать</option>
                 <option value="fix">остановиться и связать боем</option>
@@ -210,7 +210,7 @@ export default function OrderPlanningPanel() {
                     event.target.value as PlannedOrder["lossTolerance"],
                   )
                 }
-                className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
+                className="mt-1 w-full border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
               >
                 <option value="low">низкий порог</option>
                 <option value="normal">обычный</option>
@@ -236,7 +236,7 @@ export default function OrderPlanningPanel() {
                   max={5}
                   value={bridgeEdge}
                   onChange={(event) => setBridgeEdge(Number(event.target.value))}
-                  className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
+                  className="mt-1 w-full border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
                 />
                 <span className="mt-1 block text-[8px] text-staff-mute">
                   0 В · 1 СВ · 2 ЮВ · 3 З · 4 ЮЗ · 5 СЗ
@@ -332,7 +332,7 @@ export default function OrderPlanningPanel() {
                 (orderType === "prepared_attack" && !derivedTarget)
               }
               onClick={submit}
-              className="shrink-0 rounded bg-staff-gold px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-staff-void disabled:cursor-not-allowed disabled:opacity-35"
+              className="shrink-0 border border-red-900/70 bg-sov-fill px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-sov-text hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-35"
             >
               Добавить
             </button>
@@ -345,7 +345,7 @@ export default function OrderPlanningPanel() {
           {plan.orders.map((order) => (
             <div
               key={order.id}
-              className="flex items-center gap-2 rounded bg-staff-void/55 px-2 py-1.5 text-[10px]"
+              className="flex items-center gap-2 border border-staff-edge/60 bg-staff-void/55 px-2 py-1.5 text-[10px]"
             >
               <span className="min-w-0 flex-1 truncate text-staff-ink-dim">
                 {ORDER_TYPE_LABELS[order.orderType]} · {order.entityIds.length} · I
@@ -438,7 +438,7 @@ function ReactionTemplates({
                 reaction,
               });
             }}
-            className="rounded border border-staff-edge bg-staff-void/50 px-2 py-1.5 text-left text-[9px] text-staff-ink-dim hover:border-staff-edge2 disabled:opacity-30"
+            className="border border-staff-edge bg-staff-void/50 px-2 py-1.5 text-left text-[9px] text-staff-ink-dim hover:border-staff-edge2 disabled:opacity-30"
           >
             {template.label}
           </button>
@@ -465,7 +465,7 @@ function SmallSelect({
       <select
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
+        className="mt-1 w-full border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -495,7 +495,7 @@ function TextField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink placeholder:text-staff-mute/50"
+        className="mt-1 w-full border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink placeholder:text-staff-mute/50"
       />
     </label>
   );
@@ -522,7 +522,7 @@ function ChoiceRow({
           <button
             key={choice.id}
             onClick={() => onToggle(choice.id)}
-            className={`shrink-0 rounded border px-2 py-1 text-[9px] ${
+            className={`shrink-0 border px-2 py-1 text-[9px] ${
               selected.includes(choice.id)
                 ? "border-staff-gold bg-staff-gold/10 text-staff-gold"
                 : "border-staff-edge text-staff-ink-dim"

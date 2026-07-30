@@ -18,10 +18,10 @@ export default function ExecutionPanel() {
   const activeOrders = [...state.plans.germany.orders, ...state.plans.ussr.orders];
   const latestReport = state.impulseReports.at(-1);
   return (
-    <section className="border-b border-staff-edge bg-staff-panel p-3">
+    <section className="border-b border-staff-edge/80 bg-staff-bg/40 p-3">
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="font-dispatch text-base text-staff-ink">
+          <h2 className="staff-section-title">
             Исполнение приказов
           </h2>
           <p className="text-[9px] uppercase tracking-[0.18em] text-staff-mute">
@@ -61,7 +61,7 @@ export default function ExecutionPanel() {
         {activeOrders.map((order) => (
           <div
             key={order.id}
-            className="flex items-center gap-2 rounded bg-staff-void/55 px-2 py-1.5 text-[10px]"
+            className="flex items-center gap-2 border border-staff-edge/60 bg-staff-void/55 px-2 py-1.5 text-[10px]"
           >
             <span
               className={`h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -99,7 +99,7 @@ export default function ExecutionPanel() {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded bg-staff-void/45 px-1 py-1.5">
+    <div className="border border-staff-edge/60 bg-staff-void/45 px-1 py-1.5">
       <div className="font-mono text-xs text-staff-ink">{value}</div>
       <div className="text-[8px] uppercase tracking-wider text-staff-mute">
         {label}
