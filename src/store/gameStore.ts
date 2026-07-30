@@ -17,9 +17,16 @@ export interface Toast {
   kind: "info" | "combat" | "objective" | "event";
 }
 
+interface HistoryEntry {
+  state: GameState;
+  commands: GameCommand[];
+}
+
 interface StoreState {
   state: GameState | null;
   commands: GameCommand[];
+  historyPast: HistoryEntry[];
+  historyFuture: HistoryEntry[];
   selectedHexId: string | null;
   selectedUnitIds: string[];
   attackTargetHexId: string | null;
@@ -35,6 +42,8 @@ interface StoreState {
   loadGame: (state: GameState, commands: GameCommand[]) => void;
   saveProgress: () => Promise<string | null>;
   dispatch: (cmd: GameCommand) => boolean;
+  undo: () => boolean;
+  redo: () => boolean;
   selectHex: (hexId: string | null) => void;
   toggleUnitInSelection: (unitId: string) => void;
   setSelection: (ids: string[]) => void;
@@ -74,6 +83,8 @@ function eventToText(e: GameEvent): { text: string; kind: Toast["kind"]; side?: 
 export const useGame = create<StoreState>((set, get) => ({
   state: null,
   commands: [],
+  historyPast: [],
+  historyFuture: [],
   selectedHexId: null,
   selectedUnitIds: [],
   attackTargetHexId: null,
@@ -90,6 +101,8 @@ export const useGame = create<StoreState>((set, get) => ({
     set({
       state,
       commands: [],
+      historyPast: [],
+      historyFuture: [],
       selectedHexId: null,
       selectedUnitIds: [],
       attackTargetHexId: null,
@@ -107,6 +120,8 @@ export const useGame = create<StoreState>((set, get) => ({
     set({
       state,
       commands,
+      historyPast: [],
+      historyFuture: [],
       selectedHexId: null,
       selectedUnitIds: [],
       attackTargetHexId: null,
@@ -173,7 +188,7 @@ export const useGame = create<StoreState>((set, get) => ({
   },
 
   dispatch: (cmd) => {
-    const { state, commands } = get();
+    const { state, commands, historyPast } = get();
     if (!state) return false;
     const res = applyCommand(state, cmd);
     if (!res.ok) {
@@ -197,6 +212,8 @@ export const useGame = create<StoreState>((set, get) => ({
     set({
       state: res.state,
       commands: cmd.type === "END_PHASE" || cmd.type === "END_ACTIVATION" ? [...commands, cmd] : [...commands, cmd],
+      historyPast: [...historyPast, { state, commands }].slice(-40),
+      historyFuture: [],
       error: null,
       toasts: [...get().toasts.slice(-4), ...toasts].slice(-6),
       toastSeq: n,
@@ -215,6 +232,56 @@ export const useGame = create<StoreState>((set, get) => ({
           : get().openPanel,
     });
     get().recomputeReachable();
+    return true;
+  },
+
+  undo: () => {
+    const { state, commands, historyPast, historyFuture } = get();
+    const previous = historyPast.at(-1);
+    if (!state || !previous) return false;
+    set({
+      state: previous.state,
+      commands: previous.commands,
+      historyPast: historyPast.slice(0, -1),
+      historyFuture: [{ state, commands }, ...historyFuture].slice(0, 40),
+      selectedHexId: null,
+      selectedUnitIds: [],
+      attackTargetHexId: null,
+      planningRoute: null,
+      reachable: null,
+      error: null,
+      openPanel: null,
+      toasts: [
+        ...get().toasts.slice(-4),
+        { id: get().toastSeq, text: "Последнее действие отменено.", kind: "info" as const },
+      ].slice(-6),
+      toastSeq: get().toastSeq + 1,
+    });
+    return true;
+  },
+
+  redo: () => {
+    const { state, commands, historyPast, historyFuture } = get();
+    const next = historyFuture[0];
+    if (!state || !next) return false;
+    set({
+      state: next.state,
+      commands: next.commands,
+      historyPast: [...historyPast, { state, commands }].slice(-40),
+      historyFuture: historyFuture.slice(1),
+      selectedHexId: null,
+      selectedUnitIds: [],
+      attackTargetHexId: null,
+      planningRoute: null,
+      reachable: null,
+      error: null,
+      openPanel: null,
+      toasts: [
+        ...get().toasts.slice(-4),
+        { id: get().toastSeq, text: "Отменённое действие повторено.", kind: "info" as const },
+      ].slice(-6),
+      toastSeq: get().toastSeq + 1,
+    });
     return true;
   },
 

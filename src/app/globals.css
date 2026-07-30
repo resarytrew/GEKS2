@@ -56,7 +56,7 @@ body {
     radial-gradient(circle at 80% 15%, rgba(81, 91, 75, 0.22), transparent 42%),
     var(--color-staff-void);
   color: var(--color-staff-ink);
-  font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: "Bahnschrift", "Arial Narrow", "Roboto Condensed", "Segoe UI", sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: geometricPrecision;
@@ -72,6 +72,17 @@ input {
 button,
 a {
   user-select: none;
+  transition:
+    color 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+button:active,
+a:active {
+  transform: translateY(1px);
 }
 
 button:focus-visible,
@@ -277,3 +288,355 @@ input:focus-visible {
 .animate-telegraph { animation: telegraph-in 0.22s ease-out both; }
 
 .tabular { font-variant-numeric: tabular-nums; }
+
+.brand-standard {
+  position: relative;
+  border: 1px solid rgba(198, 160, 90, 0.28);
+  background:
+    linear-gradient(135deg, rgba(255, 220, 148, 0.08), transparent 55%),
+    #5a2118;
+  box-shadow:
+    inset 0 0 18px rgba(205, 143, 58, 0.08),
+    0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.brand-standard::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border: 1px solid rgba(198, 160, 90, 0.12);
+}
+
+.rail-control {
+  position: relative;
+  overflow: hidden;
+}
+
+.rail-control[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: var(--color-staff-gold);
+  box-shadow: 0 0 10px rgba(198, 160, 90, 0.45);
+}
+
+.command-button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  border: 1px solid rgba(126, 106, 72, 0.8);
+  background: rgba(24, 22, 17, 0.22);
+  padding: 0.68rem 1rem;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.command-button:hover {
+  border-color: rgba(198, 160, 90, 0.78);
+  color: var(--color-staff-gold);
+  background: rgba(198, 160, 90, 0.08);
+}
+
+.command-button-primary {
+  border-color: #73511f;
+  background:
+    linear-gradient(180deg, rgba(255, 226, 166, 0.08), transparent),
+    #78521c;
+  color: #f5e8ca;
+  box-shadow: 0 10px 24px rgba(55, 34, 8, 0.28);
+}
+
+.command-button-primary:hover {
+  border-color: #b38943;
+  background-color: #8d6325;
+  color: #fff1cf;
+}
+
+.dossier-hero {
+  display: flex;
+  flex-direction: column;
+}
+
+.paper-clip {
+  position: absolute;
+  left: 24px;
+  top: -8px;
+  z-index: 3;
+  width: 17px;
+  height: 76px;
+  border: 2px solid rgba(66, 62, 52, 0.62);
+  border-radius: 11px;
+  transform: rotate(5deg);
+  box-shadow: inset 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.paper-clip::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 7px;
+  width: 6px;
+  height: 55px;
+  border: 1px solid rgba(66, 62, 52, 0.55);
+  border-radius: 8px;
+}
+
+.dossier-watermark {
+  position: absolute;
+  inset: 10% 5% 5% 57%;
+  z-index: 0;
+  opacity: 0.2;
+  background:
+    linear-gradient(155deg, transparent 0 53%, rgba(70, 67, 51, 0.2) 54% 56%, transparent 57%),
+    radial-gradient(ellipse at 45% 72%, rgba(64, 72, 57, 0.35), transparent 36%),
+    repeating-radial-gradient(ellipse at 65% 40%, rgba(70, 67, 51, 0.16) 0 1px, transparent 1px 11px);
+  filter: sepia(1);
+  mask-image: linear-gradient(90deg, transparent, #000 24%);
+}
+
+.campaign-thumb {
+  background-color: #34443e;
+  background-image:
+    linear-gradient(115deg, transparent 30%, rgba(199, 163, 81, 0.22) 31% 33%, transparent 34%),
+    repeating-linear-gradient(25deg, rgba(22, 29, 24, 0.4) 0 2px, transparent 2px 9px),
+    radial-gradient(circle at 72% 40%, rgba(151, 68, 46, 0.65) 0 3px, transparent 4px);
+}
+
+.campaign-thumb-2 {
+  background-position: 12px -4px, 0 0, 38% 64%;
+  filter: hue-rotate(-12deg);
+}
+
+.campaign-thumb-3 {
+  background-position: -8px 6px, 3px 5px, 58% 28%;
+  filter: brightness(0.9) sepia(0.2);
+}
+
+.staff-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-staff-gold);
+}
+
+.map-mode-relief .map-grain {
+  opacity: 0.3;
+  background-image:
+    repeating-linear-gradient(135deg, rgba(255, 245, 213, 0.05) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.08) 0 1px, transparent 1px 7px);
+}
+
+.map-mode-relief .map-vignette {
+  background:
+    radial-gradient(circle at 48% 42%, transparent 42%, rgba(16, 13, 8, 0.34) 78%, rgba(5, 5, 4, 0.76) 100%),
+    linear-gradient(110deg, rgba(27, 79, 87, 0.13), transparent 30%, rgba(113, 55, 37, 0.16));
+}
+
+@media (max-width: 1380px) {
+  .home-workspace {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    gap: 1rem;
+    padding-inline: 1rem;
+  }
+
+  .dossier-hero {
+    padding-inline: 3rem;
+  }
+}
+
+@media (max-width: 1240px) {
+  .operation-sheet {
+    display: none !important;
+  }
+
+  .home-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-sidebar {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .home-shell {
+    overflow-y: auto;
+  }
+
+  .home-workspace {
+    display: block;
+    min-height: auto;
+  }
+
+  .home-primary {
+    min-height: 920px;
+    grid-template-rows: minmax(650px, auto) 250px;
+    padding-left: 0;
+  }
+
+  .dossier-hero {
+    padding-inline: 2rem;
+  }
+
+  .dossier-hero h1 {
+    font-size: clamp(40px, 8vw, 58px);
+  }
+
+  .dossier-hero > div:nth-of-type(5) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-height: 820px) and (min-width: 901px) {
+  .home-primary {
+    grid-template-rows: minmax(0, 1fr) 190px;
+  }
+
+  .dossier-hero {
+    padding-block: 1.6rem;
+  }
+
+  .dossier-hero h1 {
+    margin-top: 1rem;
+    font-size: clamp(40px, 4.2vw, 58px);
+  }
+
+  .dossier-hero p {
+    margin-top: 0.8rem;
+    font-size: 12px;
+    line-height: 1.25rem;
+  }
+
+  .dossier-hero .command-button {
+    min-height: 36px;
+    padding-block: 0.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .ops-shell > .staff-topbar {
+    height: 56px;
+  }
+
+  .ops-shell > .staff-topbar > div:first-child {
+    width: 56px;
+    padding-inline: 8px;
+    border-right-color: rgba(173, 146, 91, 0.25);
+  }
+
+  .ops-shell > .staff-topbar > div:first-child .brand-standard {
+    width: 40px;
+    height: 40px;
+  }
+
+  .ops-shell > .staff-topbar > div:first-child > div:last-child,
+  .ops-shell > .staff-topbar > div:nth-child(3) {
+    display: none;
+  }
+
+  .ops-shell > .staff-topbar > div:nth-child(2) {
+    width: auto;
+    min-width: 104px;
+    flex: 1 1 auto;
+    padding-inline: 10px;
+  }
+
+  .ops-shell > .staff-topbar > div:nth-child(2) > div:first-child {
+    font-size: 10px;
+  }
+
+  .ops-shell > .staff-topbar > div:last-child {
+    padding-inline: 6px;
+  }
+
+  .ops-shell > .staff-topbar > div:last-child button {
+    max-width: 154px;
+    padding: 8px 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .ops-shell > .ops-layer {
+    padding-bottom: 58px;
+  }
+
+  .ops-shell > .ops-layer > .staff-rail {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 40;
+    width: 100%;
+    height: 58px;
+    flex-direction: row;
+    padding: 3px 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-top: 1px solid rgba(173, 146, 91, 0.3);
+    border-right: 0;
+  }
+
+  .ops-shell > .ops-layer > .staff-rail > div:first-child {
+    flex: 1 0 max-content;
+    flex-direction: row;
+    gap: 2px;
+    padding: 0;
+  }
+
+  .ops-shell > .ops-layer > .staff-rail .rail-control {
+    min-width: 50px;
+    min-height: 50px;
+    padding: 4px;
+    font-size: 7px;
+    letter-spacing: 0.04em;
+  }
+
+  .ops-shell > .ops-layer > .staff-rail .rail-control svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .ops-shell > .ops-layer > .staff-rail > div:last-child {
+    display: none;
+  }
+
+  .map-terrain-switcher {
+    display: none;
+  }
+
+  .map-filter-control {
+    bottom: 8px;
+  }
+
+  .map-filter-control > button {
+    padding: 7px 12px;
+  }
+
+  .map-filter-control > div {
+    position: fixed;
+    inset: 68px 10px 74px;
+    width: auto;
+    max-height: none;
+    transform: none;
+  }
+
+  .map-zoom-controls {
+    right: 8px;
+    bottom: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

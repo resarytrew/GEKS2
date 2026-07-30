@@ -2,27 +2,31 @@
  * Geographic world generator for the Baltic theatre.
  *
  * Real city coordinates (longitude / latitude) are projected onto the flat-top
- * axial hex grid. Coastlines, the Gulf of Riga, Lake Peipus, the major rivers
- * (Neman, Daugava, Velikaya), roads and railways are derived from data rather
- * than drawn as a static image. Bridges are generated automatically wherever a
- * road or railway crosses a river edge.
+ * axial hex grid. Land, coastlines, lakes and river centrelines use a checked-in
+ * Natural Earth 1:10m scenario clip. Scenario roads and railways follow the
+ * historically relevant operational corridors. Bridges are generated wherever
+ * a transport line crosses a river edge.
  *
- * NOTE ON VERIFICATION: geographic coordinates and the theatre outline are
- * approximations tuned for a readable operational map. They are tagged with
- * confidence "placeholder" / "probable" in scenario sources. The projection
+ * Unit placement and 1941 infrastructure remain scenario reconstructions and
+ * keep their source-confidence tags. The physical geography is authoritative
+ * at the display scale. The projection
  * yields hexes of roughly 11–13 km (≈ the 10 km design scale).
  */
 
 import type { HexState, Terrain, Control, Settlement, Bridge } from "@/engine/types";
 import {
   HEX_SIZE,
+  SQRT3,
+  EDGE_TO_DIRECTION,
   keyOf,
   axialToPixel,
+  distance,
   neighbors,
   hexLine,
   sharedEdge,
   type Axial,
 } from "@/engine/hex";
+import { LAKE_POLYGONS, LAND_POLYGONS, type GeoPath } from "./geography";
 
 export const MAP = {
   cols: 52,
@@ -50,50 +54,21 @@ export function lonLatToAxial(lon: number, lat: number): Axial {
   return offsetToAxial(col, row);
 }
 
-type Poly = number[][];
+/**
+ * Smooth theatre projection for cartographic vectors. Hex centres retain their
+ * odd-column stagger, while coastlines and rivers must not zig-zag between
+ * those centres.
+ */
+export function lonLatToWorldPixel(lon: number, lat: number): { x: number; y: number } {
+  const u = (lon - MAP.lonMin) / LON_SPAN;
+  const v = (MAP.latMax - lat) / LAT_SPAN;
+  return {
+    x: HEX_SIZE * 1.5 * u * (MAP.cols - 1),
+    y: HEX_SIZE * SQRT3 * (v * (MAP.rows - 1) + 0.25),
+  };
+}
 
-const LAND: Poly = [
-  [19.4, 53.7],
-  [30.6, 53.7],
-  [30.6, 59.85],
-  [28.5, 59.5],
-  [26.6, 59.5],
-  [25.2, 59.45],
-  [23.7, 58.85],
-  [22.7, 58.05],
-  [21.65, 57.5],
-  [21.0, 56.95],
-  [21.0, 56.5],
-  [21.0, 56.0],
-  [21.1, 55.6],
-  [20.6, 55.2],
-  [20.1, 54.78],
-  [19.4, 53.7],
-];
-
-const GULF_OF_RIGA: Poly = [
-  [23.0, 57.2],
-  [23.8, 57.05],
-  [24.5, 57.0],
-  [24.75, 57.45],
-  [24.6, 58.05],
-  [23.6, 58.55],
-  [22.9, 58.25],
-  [22.7, 57.6],
-  [23.0, 57.2],
-];
-
-const LAKE_PEIPUS: Poly = [
-  [26.9, 57.9],
-  [27.85, 58.0],
-  [28.05, 58.65],
-  [27.6, 59.1],
-  [26.95, 58.9],
-  [26.55, 58.3],
-  [26.9, 57.9],
-];
-
-function pointInPoly(lon: number, lat: number, poly: Poly): boolean {
+function pointInPoly(lon: number, lat: number, poly: GeoPath): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
     const xi = poly[i][0];
@@ -106,6 +81,10 @@ function pointInPoly(lon: number, lat: number, poly: Poly): boolean {
     if (intersect) inside = !inside;
   }
   return inside;
+}
+
+function pointInPolygons(lon: number, lat: number, polygons: readonly GeoPath[]): boolean {
+  return polygons.some((polygon) => pointInPoly(lon, lat, polygon));
 }
 
 export interface CityDef {
@@ -244,9 +223,83 @@ function cityByName(name: string): CityDef | undefined {
   return CITIES.find((c) => c.id === name);
 }
 
+const TRANSPORT_ROUTE_CACHE = new Map<string, Axial[]>();
+
+function transportLandRoute(
+  start: Axial,
+  end: Axial,
+  hexes: Record<string, HexState>,
+): Axial[] {
+  const startId = keyOf(start.q, start.r);
+  const endId = keyOf(end.q, end.r);
+  const cacheKey = `${startId}>${endId}`;
+  const cached = TRANSPORT_ROUTE_CACHE.get(cacheKey);
+  if (cached) return cached;
+  const open = new Set<string>([startId]);
+  const previous = new Map<string, string>();
+  const cost = new Map<string, number>([[startId, 0]]);
+
+  while (open.size > 0) {
+    let currentId = "";
+    let currentScore = Infinity;
+    for (const candidateId of open) {
+      const candidate = hexes[candidateId];
+      if (!candidate) continue;
+      const score = (cost.get(candidateId) ?? Infinity) + distance(candidate, end) * 0.75;
+      if (score < currentScore) {
+        currentId = candidateId;
+        currentScore = score;
+      }
+    }
+    if (!currentId) break;
+    if (currentId === endId) {
+      const route: Axial[] = [];
+      let cursor: string | undefined = endId;
+      while (cursor) {
+        const hex = hexes[cursor];
+        if (hex) route.push({ q: hex.q, r: hex.r });
+        cursor = previous.get(cursor);
+      }
+      route.reverse();
+      TRANSPORT_ROUTE_CACHE.set(cacheKey, route);
+      return route;
+    }
+    open.delete(currentId);
+    const current = hexes[currentId];
+    if (!current) continue;
+    for (const adjacent of neighbors(current)) {
+      const adjacentId = keyOf(adjacent.q, adjacent.r);
+      const hex = hexes[adjacentId];
+      if (!hex || hex.terrain === "sea" || hex.terrain === "lake") continue;
+      const terrainCost =
+        hex.terrain === "swamp"
+          ? 1.8
+          : hex.terrain === "dense_forest"
+            ? 1.45
+            : hex.terrain === "forest"
+              ? 1.2
+              : 1;
+      const nextCost = (cost.get(currentId) ?? 0) + terrainCost;
+      if (nextCost >= (cost.get(adjacentId) ?? Infinity)) continue;
+      cost.set(adjacentId, nextCost);
+      previous.set(adjacentId, currentId);
+      open.add(adjacentId);
+    }
+  }
+
+  // Both scenario endpoints are force-cleared settlement hexes, so this is
+  // only a defensive fallback for malformed custom geography.
+  const fallback = hexLine(start, end);
+  TRANSPORT_ROUTE_CACHE.set(cacheKey, fallback);
+  return fallback;
+}
+
 function traceWaypoints(points: Axial[], hexes: Record<string, HexState>, kind: "river" | "major" | "minor" | "rail"): void {
   for (let i = 0; i < points.length - 1; i++) {
-    const line = hexLine(points[i], points[i + 1]);
+    const line =
+      kind === "river"
+        ? hexLine(points[i], points[i + 1])
+        : transportLandRoute(points[i], points[i + 1], hexes);
     for (let j = 0; j < line.length - 1; j++) {
       const a = line[j];
       const b = line[j + 1];
@@ -292,10 +345,12 @@ export function buildWorld(): BuiltWorld {
       const lat = MAP.latMax - v * LAT_SPAN;
       const id = keyOf(q, r);
 
+      const isLake = LAKE_POLYGONS.some((lake) =>
+        pointInPolygons(lon, lat, lake.rings),
+      );
       let terrain: Terrain;
-      if (pointInPoly(lon, lat, LAKE_PEIPUS)) terrain = "lake";
-      else if (pointInPoly(lon, lat, GULF_OF_RIGA)) terrain = "sea";
-      else if (!pointInPoly(lon, lat, LAND)) terrain = "sea";
+      if (isLake) terrain = "lake";
+      else if (!pointInPolygons(lon, lat, LAND_POLYGONS)) terrain = "sea";
       else terrain = "clear";
 
       let control: Control = lon < 21.3 ? "germany" : "ussr";
@@ -384,12 +439,47 @@ export function buildWorld(): BuiltWorld {
   for (const way of ROAD_MINOR_WAYS) traceWaypoints(toPts(way), hexes, "minor");
   for (const way of RAIL_WAYS) traceWaypoints(toPts(way), hexes, "rail");
 
+  // Rear-area map-edge connections represent the off-map Königsberg and
+  // Leningrad/Pskov logistics corridors. They also ensure the physical
+  // coastline clip cannot accidentally sever a scenario supply source from
+  // the historical transport network.
+  const westernRear = offsetToAxial(0, 47);
+  const easternRear = offsetToAxial(MAP.cols - 1, 0);
+  const germanStaging = lonLatToAxial(21.6, 55.15);
+  const konigsberg = cityByName("konigsberg");
+  const taurage = cityByName("taurage");
+  const pskov = cityByName("pskov");
+  if (konigsberg) {
+    traceWaypoints([westernRear, lonLatToAxial(konigsberg.lon, konigsberg.lat)], hexes, "major");
+  }
+  if (taurage) {
+    traceWaypoints(
+      [westernRear, germanStaging, lonLatToAxial(taurage.lon, taurage.lat)],
+      hexes,
+      "major",
+    );
+  }
+  if (pskov) {
+    traceWaypoints([easternRear, lonLatToAxial(pskov.lon, pskov.lat)], hexes, "major");
+  }
+
   // Auto-generate bridges where road/rail crosses a river edge
   for (const id in hexes) {
     const hex = hexes[id];
     const crossEdges = new Set<number>([...hex.majorRoadEdges, ...hex.roadEdges, ...hex.railwayEdges]);
     for (const e of crossEdges) {
       if (!hex.riverEdges.includes(e)) continue;
+      const opposite = neighbors(hex)[EDGE_TO_DIRECTION[e]];
+      const other = opposite ? hexes[keyOf(opposite.q, opposite.r)] : undefined;
+      if (
+        !other ||
+        hex.terrain === "sea" ||
+        hex.terrain === "lake" ||
+        other.terrain === "sea" ||
+        other.terrain === "lake"
+      ) {
+        continue;
+      }
       if (hex.bridgeEdges.some((b) => b.edge === e)) continue;
       const hasRoad = hex.majorRoadEdges.includes(e) || hex.roadEdges.includes(e);
       const hasRail = hex.railwayEdges.includes(e);

@@ -149,6 +149,14 @@ export default function OrderPlanningPanel() {
         </p>
       ) : (
         <>
+          <StepLabel number={1} title="Выбранные части" />
+          <div className="mt-2 border border-staff-edge/70 bg-staff-void/45 px-3 py-2 text-[10px] text-staff-ink-dim">
+            {selectedUnitIds.length > 0
+              ? `${selectedUnitIds.length} соединений готовы получить приказ`
+              : "Выберите свои соединения на карте"}
+          </div>
+
+          <StepLabel number={2} title="Тип и параметры приказа" />
           <div className="mt-3 grid grid-cols-2 gap-2">
             <label className="col-span-2 text-[10px] text-staff-mute">
               Тип приказа
@@ -219,6 +227,7 @@ export default function OrderPlanningPanel() {
             </label>
           </div>
 
+          <StepLabel number={3} title="Маршрут и цель" />
           <div className="mt-2 grid grid-cols-2 gap-2">
             <TextField
               label="Целевой гекс"
@@ -245,6 +254,7 @@ export default function OrderPlanningPanel() {
             )}
           </div>
 
+          <StepLabel number={4} title="Поддержка и условия" />
           {supportCandidates.length > 0 && (
             <ChoiceRow
               title="Поддержка"
@@ -307,6 +317,7 @@ export default function OrderPlanningPanel() {
             />
           )}
 
+          <StepLabel number={5} title="Надёжность и стоимость" />
           <div className="mt-3 flex items-end justify-between gap-3">
             <div className="min-w-0 text-[10px] text-staff-mute">
               <div>
@@ -383,6 +394,19 @@ export default function OrderPlanningPanel() {
         />
       )}
     </section>
+  );
+}
+
+function StepLabel({ number, title }: { number: number; title: string }) {
+  return (
+    <div className="mt-4 flex items-center gap-2 border-b border-staff-edge/55 pb-1.5 first:mt-3">
+      <span className="flex h-5 w-5 items-center justify-center bg-[#c0af86] text-[10px] font-black text-[#272116]">
+        {number}
+      </span>
+      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-staff-ink-dim">
+        {title}
+      </span>
+    </div>
   );
 }
 
