@@ -6,6 +6,7 @@ import { EVENTS, SCENARIO } from "@/scenarios/baltic-1941/scenario";
 import { SIDE_SHORT, ordinalTurn } from "@/lib/labels";
 import type { GameEvent } from "@/engine/types";
 import { Icon } from "@/components/Icon";
+import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
 
 export default function Modals() {
   const openPanel = useGame((s) => s.openPanel);
@@ -52,7 +53,7 @@ function Report() {
       <>
         <Header
           title={`Разбор действий · ${report.date}`}
-          sub={`Сутки ${report.turn} · шесть импульсов`}
+          sub={`Сутки ${report.turn} · ${report.impulses.length} импульсов`}
         />
         <div className="staff-scroll overflow-y-auto p-5 text-sm text-staff-ink-dim">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -87,6 +88,17 @@ function Report() {
               title="Изменения снабжения"
               values={report.supplyChanges}
             />
+            <ReportList title="Выполненные цели" values={report.capturedObjectives} />
+            <ReportList
+              title="Изменение счёта"
+              values={report.scoreChanges.map((change) => `${SIDE_SHORT[change.side]}: ${change.points >= 0 ? "+" : ""}${change.points}`)}
+            />
+            <ReportList
+              title="Приказы текущей стороны"
+              values={report.orderSummary[state.activeSide]
+                .filter((order) => order.visible)
+                .map((order) => `${ORDER_TYPE_LABELS[order.orderType]} — ${ORDER_STATUS_LABELS[order.status]}`)}
+            />
           </div>
           <div className="mt-4">
             <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-staff-mute">
@@ -117,7 +129,7 @@ function Report() {
             onClick={() => dispatch({ type: "END_PHASE" })}
             className="rounded bg-staff-gold px-5 py-2 text-xs font-bold uppercase tracking-wider text-staff-void hover:brightness-110"
           >
-            Следующие сутки ▶
+            Начать следующие сутки
           </button>
         </div>
       </>
