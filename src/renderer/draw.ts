@@ -8,10 +8,11 @@
  * drawn into an offscreen layer and selection / hover repaint only dynamic UI.
  */
 
-import type { GameState, HexState, UnitState, Side } from "@/engine/types";
+import type { GameState, HexState, PlannedOrder, UnitState, Side } from "@/engine/types";
 import { axialToPixel, edgeMidpoint, hexCorners, HEX_SIZE, neighbors, pixelToAxial, sharedEdge, type Axial } from "@/engine/hex";
 import { hiddenStackCount, MAX_VISIBLE_STACK_COUNTERS, orderRouteStyle, SUPPLY_MARK_SHAPES } from "@/renderer/presentation";
 import { normalizeRiverEdges } from "@/renderer/rivers";
+import { positionOrderMarker } from "@/renderer/orderMarkers";
 
 export interface Viewport {
   scale: number;
@@ -288,7 +289,7 @@ function drawCommittedOrders(ctx: CanvasRenderingContext2D, state: GameState, vp
   // Only the active side plan is rendered; opponent routes remain hidden.
   const ownOrders = state.plans[state.activeSide]?.orders ?? [];
   for (const order of ownOrders) {
-    if (!order.route || order.route.length < 2 || order.status === "cancelled") continue;
+    if (order.status === "cancelled") continue;
     ctx.strokeStyle =
       order.status === "delayed"
         ? "rgba(205,137,62,0.9)"
@@ -301,18 +302,52 @@ function drawCommittedOrders(ctx: CanvasRenderingContext2D, state: GameState, vp
     ctx.lineWidth = Math.max(2, (style === "prepared-attack" ? 4 : style === "advance" ? 3 : 2.5) * detail);
     // Status takes precedence; otherwise the order geometry is recognisable without colour.
     ctx.setLineDash(order.status === "draft" ? [8, 5] : style === "withdraw" ? [9, 5] : style === "delay" ? [3, 4] : style === "reserve" ? [2, 3] : []);
-    ctx.beginPath();
-    for (let index = 0; index < order.route.length; index++) {
-      const hex = state.hexes[order.route[index]];
-      if (!hex) continue;
-      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
-      const screen = worldToScreen(point.x, point.y, vp);
-      if (index === 0) ctx.moveTo(screen.x, screen.y);
-      else ctx.lineTo(screen.x, screen.y);
+    if (order.route && order.route.length >= 2) {
+      ctx.beginPath();
+      for (let index = 0; index < order.route.length; index++) {
+        const hex = state.hexes[order.route[index]];
+        if (!hex) continue;
+        const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+        const screen = worldToScreen(point.x, point.y, vp);
+        if (index === 0) ctx.moveTo(screen.x, screen.y);
+        else ctx.lineTo(screen.x, screen.y);
+      }
+      ctx.stroke();
+    } else {
+      drawPositionOrderMarker(ctx, state, order, vp, detail);
     }
-    ctx.stroke();
     ctx.setLineDash([]);
   }
+}
+
+function drawPositionOrderMarker(ctx: CanvasRenderingContext2D, state: GameState, order: PlannedOrder, vp: Viewport, detail: number): void {
+  const marker = positionOrderMarker(order);
+  if (!marker) return;
+  const lead = state.units[order.entityIds[0]];
+  const hexId = marker === "engineering" ? order.bridgeHexId : order.targetHexId ?? lead?.hexId;
+  const hex = hexId ? state.hexes[hexId] : undefined;
+  if (!hex) return;
+  let point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+  if (marker === "engineering" && order.bridgeEdge != null) point = edgeMidpoint(hex.q, hex.r, order.bridgeEdge, HEX_SIZE);
+  const screen = worldToScreen(point.x, point.y, vp);
+  const r = Math.max(5, 7 * detail);
+  ctx.save();
+  ctx.lineWidth = Math.max(1.5, 2 * detail);
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  if (marker === "attack") {
+    ctx.moveTo(screen.x - r, screen.y + r); ctx.lineTo(screen.x + r, screen.y); ctx.lineTo(screen.x - r, screen.y - r);
+  } else if (marker === "defend") {
+    ctx.arc(screen.x, screen.y, r, Math.PI, 0);
+  } else if (marker === "reserve") {
+    ctx.moveTo(screen.x, screen.y - r); ctx.lineTo(screen.x + r, screen.y); ctx.lineTo(screen.x, screen.y + r); ctx.lineTo(screen.x - r, screen.y); ctx.closePath();
+  } else if (marker === "recover") {
+    ctx.arc(screen.x, screen.y, r, 0, Math.PI * 2);
+  } else {
+    ctx.moveTo(screen.x - r, screen.y); ctx.lineTo(screen.x + r, screen.y); ctx.moveTo(screen.x, screen.y - r); ctx.lineTo(screen.x, screen.y + r);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawEdgeLines(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport, kind: "road" | "major" | "rail"): void {
