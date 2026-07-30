@@ -1,5 +1,10 @@
 # Combat flow v0.4
 
+Correctness patch не меняет CRT. `CombatModifier.applied` означает, что
+модификатор уже включён в strength/ratio и UI не должен применять его повторно.
+`sourceUnitIds` указывает источник. `expectedRange` является оценочным
+presentation-диапазоном, а не вероятностью результата.
+
 1. Create a contact from a prepared attack, a route blockage, or simultaneous
    movement.
 2. Determine attacker and defender, including committed reserves and support.

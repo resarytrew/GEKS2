@@ -59,7 +59,7 @@ function Report() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Mini label="Контакты" value={String(report.combats.length)} />
             <Mini label="Уничтожено" value={String(report.destroyedUnits.length)} />
-            <Mini label="Повреждено" value={String(report.damagedUnits.length)} />
+            <Mini label="Потери за сутки" value={String(report.damagedThisTurn.length)} />
             <Mini
               label="Мосты"
               value={String(report.bridgesDestroyed.length)}
@@ -74,11 +74,19 @@ function Report() {
               )}
             />
             <ReportList
-              title="Потери"
+              title="Потери за сутки"
               values={[
                 ...report.destroyedUnits.map((id) => `${id} — уничтожен`),
-                ...report.damagedUnits.map((id) => `${id} — ослаблен`),
+                ...report.damagedThisTurn.map(
+                  (id) => `${state.units[id]?.shortName ?? id} — потеря шага`,
+                ),
               ]}
+            />
+            <ReportList
+              title="Соединения неполного состава"
+              values={report.understrengthUnits.map(
+                (id) => state.units[id]?.shortName ?? id,
+              )}
             />
             <ReportList
               title="Командные сбои"

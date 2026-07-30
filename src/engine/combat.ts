@@ -21,6 +21,9 @@ export interface CombatModifier {
     | "posture"
     | "order";
   public: boolean;
+  sourceUnitIds?: string[];
+  /** True when the modifier is already included in strengths or ratio. */
+  applied: boolean;
 }
 
 export interface CombatParticipant {
@@ -52,6 +55,7 @@ export interface CombatDeclaration {
   defenderIds?: string[];
   airBonus?: number;
   supportIds?: string[];
+  defenderSupportIds?: string[];
   contactType?: ContactType;
   attackerOrderTypes?: PlannedOrderType[];
   defenderOrderTypes?: PlannedOrderType[];
@@ -193,16 +197,28 @@ export function buildCombatModel(
     );
   const supportUnits = (declaration.supportIds ?? [])
     .map((id) => state.units[id])
-    .filter(isCombatUnit);
+    .filter(
+      (unit): unit is UnitState =>
+        isCombatUnit(unit) && unit.side === attackerSide,
+    );
+  const defenderSupportUnits = (declaration.defenderSupportIds ?? [])
+    .map((id) => state.units[id])
+    .filter(
+      (unit): unit is UnitState =>
+        isCombatUnit(unit) && unit.side === enemyOf(attackerSide),
+    );
   const airBonus = declaration.airBonus ?? 0;
   const penetratesHeavyArmor =
     airBonus > 0 ||
-    attackers.some(
+    [...attackers, ...supportUnits].some(
       (unit) =>
         unit.traits.includes("combined_arms") ||
         unit.traits.includes("heavy_at"),
     ) ||
-    attackers.some((unit) => unit.unitType === "engineer");
+    [...attackers, ...supportUnits].some(
+      (unit) =>
+        unit.unitType === "engineer" || unit.traits.includes("engineer"),
+    );
   const heavyArmor = defenders.some(
     (unit) =>
       unit.traits.includes("heavy_armor") ||
@@ -221,6 +237,10 @@ export function buildCombatModel(
             multiplier: 0.6,
             source: "armor",
             public: true,
+            sourceUnitIds: defenders
+              .filter((unit) => unit.traits.includes("heavy_armor"))
+              .map((unit) => unit.id),
+            applied: true,
           },
         ]
       : [];
@@ -243,10 +263,13 @@ export function buildCombatModel(
       supportStrength +
       airBonus) *
     orderMultiplier;
-  const defenderStrength = defenders.reduce(
-    (sum, unit) => sum + defenseStrength(state, unit),
-    0,
-  );
+  const defenderStrength =
+    defenders.reduce((sum, unit) => sum + defenseStrength(state, unit), 0) +
+    defenderSupportUnits.reduce(
+      (sum, unit) =>
+        sum + Math.max(0.5, defenseStrength(state, unit) * 0.35),
+      0,
+    );
   const armorMultiplier = armorModifiers.reduce(
     (value, modifier) => value * modifier.multiplier,
     1,
@@ -270,6 +293,8 @@ export function buildCombatModel(
       multiplier: commandFactor(unit),
       source: "command" as const,
       public: true,
+      sourceUnitIds: [unit.id],
+      applied: true,
     }));
   const supplyModifiers = allParticipants
     .filter(
@@ -285,6 +310,8 @@ export function buildCombatModel(
         ammunitionFactor(unit, unit.side === attackerSide),
       source: "supply" as const,
       public: true,
+      sourceUnitIds: [unit.id],
+      applied: true,
     }));
   const postureModifiers = defenders
     .filter((unit) => (unit.defensivePosture?.level ?? 0) > 0)
@@ -294,6 +321,8 @@ export function buildCombatModel(
       multiplier: 1 + unit.defensivePosture!.level * 0.1,
       source: "posture" as const,
       public: true,
+      sourceUnitIds: [unit.id],
+      applied: true,
     }));
   const orderModifiers: CombatModifier[] =
     orderMultiplier === 1
@@ -310,6 +339,8 @@ export function buildCombatModel(
             multiplier: orderMultiplier,
             source: "order",
             public: true,
+            sourceUnitIds: attackers.map((unit) => unit.id),
+            applied: true,
           },
         ];
 
@@ -334,6 +365,8 @@ export function buildCombatModel(
               multiplier: terrainFactor,
               source: "terrain",
               public: true,
+              sourceUnitIds: defenders.map((unit) => unit.id),
+              applied: true,
             },
           ],
     commandModifiers,
@@ -347,6 +380,7 @@ export function buildCombatModel(
               multiplier: 1,
               source: "support" as const,
               public: true,
+              applied: true,
             },
           ]
         : []),
@@ -356,6 +390,17 @@ export function buildCombatModel(
         multiplier: 1,
         source: "support" as const,
         public: true,
+        sourceUnitIds: [unit.id],
+        applied: true,
+      })),
+      ...defenderSupportUnits.map((unit) => ({
+        id: `defender-support:${unit.id}`,
+        label: `${unit.shortName}: поддержка обороны`,
+        multiplier: 1,
+        source: "support" as const,
+        public: true,
+        sourceUnitIds: [unit.id],
+        applied: true,
       })),
     ],
     armorModifiers,

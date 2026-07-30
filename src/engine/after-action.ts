@@ -11,13 +11,7 @@ export function buildAfterActionReport(
 ): DailyAfterActionReport {
   const events = [...state.eventLog, ...currentEvents];
   const turnEvents = events.slice(
-    Math.max(
-      0,
-      events.findLastIndex(
-        (event) =>
-          event.type === "TURN_ADVANCED" && event.turn === state.turn,
-      ),
-    ),
+    Math.max(0, state.turnStartedAtEventIndex),
   );
   const destroyedUnits = turnEvents
     .filter(
@@ -25,7 +19,19 @@ export function buildAfterActionReport(
         event.type === "UNIT_ELIMINATED",
     )
     .map((event) => event.unitId);
-  const damagedUnits = Object.values(state.units)
+  const damagedThisTurn = [
+    ...new Set(
+      turnEvents
+        .filter(
+          (
+            event,
+          ): event is Extract<GameEvent, { type: "UNIT_LOST_STEP" }> =>
+            event.type === "UNIT_LOST_STEP",
+        )
+        .map((event) => event.unitId),
+    ),
+  ].sort();
+  const understrengthUnits = Object.values(state.units)
     .filter(
       (unit) =>
         !unit.eliminated &&
@@ -92,7 +98,9 @@ export function buildAfterActionReport(
       ),
     ),
     destroyedUnits: [...new Set(destroyedUnits)],
-    damagedUnits,
+    damagedThisTurn,
+    understrengthUnits,
+    damagedUnits: damagedThisTurn,
     capturedObjectives: [...new Set(capturedObjectives)],
     bridgesDestroyed: [...new Set(bridgesDestroyed)],
     commandFailures,

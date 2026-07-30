@@ -463,6 +463,30 @@ export type PlannedOrderType =
   | "prepare_demolition"
   | "build_pontoon";
 
+export const EXECUTION_IMPULSES = [
+  "06:00–09:00",
+  "09:00–12:00",
+  "12:00–15:00",
+  "15:00–18:00",
+  "18:00–21:00",
+  "NIGHT",
+] as const;
+
+export const EXECUTION_IMPULSE_COUNT = EXECUTION_IMPULSES.length;
+export const LAST_EXECUTION_IMPULSE = EXECUTION_IMPULSE_COUNT - 1;
+
+export function isNightImpulse(impulse: number): boolean {
+  return EXECUTION_IMPULSES[impulse] === "NIGHT";
+}
+
+export const SUPPORTED_RESERVE_TRIGGER_CONDITIONS = [
+  "friendly_contact",
+  "enemy_breakthrough",
+] as const;
+
+export type ReserveTriggerCondition =
+  (typeof SUPPORTED_RESERVE_TRIGGER_CONDITIONS)[number];
+
 export interface PlannedOrder {
   id: string;
   side: Side;
@@ -503,13 +527,7 @@ export interface PlannedOrder {
 
 export interface ReserveOrderData {
   triggerRadius: number;
-  triggerConditions: Array<
-    | "friendly_contact"
-    | "friendly_retreat"
-    | "enemy_breakthrough"
-    | "meeting_engagement"
-    | "objective_threatened"
-  >;
+  triggerConditions: ReserveTriggerCondition[];
   targetPriority: string[];
   maxCommitImpulse: number;
 }
@@ -520,14 +538,21 @@ export interface ImpulseMovementBudget {
   remaining: number;
 }
 
+export const SUPPORTED_REACTION_CONDITIONS = [
+  "enemy_approaches_bridge",
+  "encirclement_threat",
+  "contact_created",
+  "friendly_contact",
+  "enemy_breakthrough",
+  "route_blocked",
+] as const;
+
 export type ReactionCondition =
-  | "enemy_approaches_bridge"
-  | "encirclement_threat"
-  | "contact_created"
-  | "friendly_contact"
-  | "enemy_breakthrough"
-  | "loss_threshold"
-  | "route_blocked";
+  (typeof SUPPORTED_REACTION_CONDITIONS)[number];
+
+export type LegacyReactionCondition =
+  | ReactionCondition
+  | "loss_threshold";
 
 export interface PlannedReaction {
   id: string;
@@ -544,7 +569,6 @@ export interface PlannedReaction {
   uses: number;
   status: "draft" | "committed" | "resolved" | "expired" | "cancelled";
   fallbackRoute?: string[];
-  lossThreshold?: number;
 }
 
 export interface SidePlan {
@@ -567,19 +591,54 @@ export type ContactType =
 export interface ContactState {
   id: string;
   hexId: string;
-  entityIds: string[];
   type: ContactType;
   impulse: number;
   detectedBy: Side[];
   resolved: boolean;
   attackerSide?: Side;
+  defenderSide?: Side;
+  attackerParticipantIds: string[];
+  defenderParticipantIds: string[];
+  attackerSupportIds: string[];
+  defenderSupportIds: string[];
+  attackerReserveIds: string[];
+  defenderReserveIds: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
+  entityIds?: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
   participantIds?: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
   supportIds?: string[];
+  /** @deprecated v0.4 compatibility; normalized on load/use. */
   reserveIds?: string[];
   createdAtImpulse?: number;
   status?: "detected" | "forming" | "ready" | "resolving" | "resolved" | "cancelled";
   resolutionId?: string;
   sourceOrderIds?: string[];
+}
+
+export type SupportType = "artillery" | "heavy_at" | "air";
+
+export interface SupportUsage {
+  unitId: string;
+  impulse: number;
+  contactId: string;
+}
+
+export interface MovementIntent {
+  orderId: string;
+  side: Side;
+  entityIds: string[];
+  fromHexId: string;
+  toHexId: string;
+}
+
+export interface ValidatedMovementIntent extends MovementIntent {
+  movementCost: number;
+  fuelCosts: Record<string, number>;
+  canEnter: boolean;
+  stopAfterEntry: boolean;
+  blockingReason?: string;
 }
 
 export interface TemporaryCommandEffect {
@@ -617,6 +676,9 @@ export interface DailyAfterActionReport {
   impulses: ImpulseReport[];
   combats: CombatResolution[];
   destroyedUnits: string[];
+  damagedThisTurn: string[];
+  understrengthUnits: string[];
+  /** @deprecated v0.4 compatibility alias for damagedThisTurn. */
   damagedUnits: string[];
   capturedObjectives: string[];
   bridgesDestroyed: string[];
@@ -746,6 +808,8 @@ export type GameEvent =
   | { type: "DELAYING_FORCE_WITHDREW"; unitId: string; path: string[] }
   | { type: "DELAYING_FORCE_PINNED"; unitId: string }
   | { type: "RESERVE_COMMITTED"; orderId: string; contactId: string; unitIds: string[] }
+  | { type: "RESERVE_NOT_COMMITTED"; orderId: string }
+  | { type: "ORDER_ABORTED_BY_LOSSES"; orderId: string; lossSteps: number; threshold: number }
   | { type: "PONTOON_COMPLETED"; orderId: string; hexId: string; edge: number }
   | { type: "RECOVERY_PROGRESS"; orderId: string; unitId: string; organizationGained: number }
   | { type: "REACTION_FAILED"; reactionId: string; reason: string }
@@ -801,6 +865,8 @@ export interface GameState {
   processedCommandIds: string[];
   preparedBridgeDemolitions: Record<string, { side: Side; preparedById?: string }>;
   temporaryCommandEffects: TemporaryCommandEffect[];
+  supportUsage: SupportUsage[];
+  turnStartedAtEventIndex: number;
   impulseReports: ImpulseReport[];
   combatResolutions: CombatResolution[];
   afterActionReport?: DailyAfterActionReport;
