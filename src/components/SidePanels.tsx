@@ -19,13 +19,16 @@ export default function SidePanels() {
   const toggle = useGame((s) => s.toggleUnitInSelection);
   if (!state || !selectedHexId) {
     return (
-      <div className="flex h-full flex-col items-center justify-center p-6 text-center text-staff-mute">
-        <div className="font-dispatch text-lg text-staff-ink-dim">Штабная карта</div>
-        <p className="mt-2 text-xs leading-relaxed">
-          Выберите гекс, чтобы изучить местность. Выберите своё соединение, чтобы увидеть
-          доступные маршруты. Кликните по достижимому гексу — для движения, по
-          противнику — для атаки.
-        </p>
+      <div className="flex h-full flex-col justify-center p-5 text-staff-mute">
+        <div className="staff-panel-inset p-5 text-center">
+          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-staff-gold">Осмотр</div>
+          <div className="mt-2 font-dispatch text-xl text-staff-ink-dim">Штабная карта</div>
+          <p className="mt-3 text-xs leading-relaxed">
+            Выберите гекс, чтобы изучить местность. Выберите своё соединение, чтобы увидеть
+            доступные маршруты. Кликните по достижимому гексу — для движения, по
+            противнику — для атаки.
+          </p>
+        </div>
       </div>
     );
   }
@@ -39,7 +42,7 @@ export default function SidePanels() {
     <div className="staff-scroll flex h-full flex-col gap-3 overflow-y-auto p-3">
       <HexInfo />
       {stack.length > 0 && (
-        <section className="rounded border border-staff-edge bg-staff-panel2/60 p-2.5">
+        <section className="staff-panel-inset p-3">
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-staff-mute">
             Стек соединений ({stack.length})
           </h3>
@@ -72,7 +75,7 @@ function HexInfo() {
   const hasRiver = hex.riverEdges.length > 0;
   const bridges = hex.bridgeEdges;
   return (
-    <section className="rounded border border-staff-edge bg-staff-panel2/60 p-3">
+    <section className="staff-panel-inset p-3">
       <div className="flex items-center justify-between">
         <h3 className="text-[10px] font-semibold uppercase tracking-widest text-staff-mute">Гекс</h3>
         <span className="font-mono text-[10px] text-staff-mute">{hexId}</span>
@@ -149,7 +152,7 @@ function UnitInspector({ unit }: { unit: UnitState }) {
   const commander = unit.commanderId ? COMMANDERS[unit.commanderId] : undefined;
   const isGer = unit.side === "germany";
   return (
-    <section className="rounded border border-staff-edge bg-staff-panel2/60 p-3">
+    <section className="staff-panel-inset p-3">
       <div className="flex items-start justify-between gap-2">
         <div>
           <h3 className="font-dispatch text-base text-staff-ink">{unit.historicalName}</h3>

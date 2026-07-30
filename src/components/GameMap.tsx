@@ -7,7 +7,6 @@ import {
   drawStaticLayer,
   fitViewport,
   screenToHex,
-  worldToScreen,
   type RenderUI,
   type Viewport,
 } from "@/renderer/draw";
@@ -150,8 +149,7 @@ export default function GameMap({
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(off, 0, 0);
       const hovered = hoverRef.current;
-      const routePath =
-        reachable && hovered && reachable.has(hovered) ? (reachable.get(hovered) as Reach)?.path ?? null : null;
+      const routePath = reachable && hovered && reachable.has(hovered) ? (reachable.get(hovered) as Reach)?.path ?? null : null;
       const ui: RenderUI = {
         selectedHexId,
         selectedUnitIds,
@@ -231,7 +229,7 @@ export default function GameMap({
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[#7d99b1]">
+    <div className="relative h-full w-full overflow-hidden bg-map-sea">
       <canvas
         ref={canvasRef}
         className="block h-full w-full cursor-crosshair touch-none"
@@ -246,25 +244,47 @@ export default function GameMap({
         }}
       />
       <canvas ref={offRef} className="hidden" />
-      <div className="pointer-events-none absolute left-3 top-3 rounded bg-black/45 px-2 py-1 text-[10px] uppercase tracking-wider text-staff-ink/80 backdrop-blur-sm">
-        Перетаскивайте — панорама · колесо — масштаб
+      <div className="map-vignette" />
+      <div className="map-grain" />
+
+      <div className="tactical-chip absolute left-4 top-4 w-[160px] p-3">
+        <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-staff-gold">Ландшафт</div>
+        <label className="mt-3 flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-staff-ink-dim">
+          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-staff-gold/60"><span className="h-2 w-2 rounded-full bg-staff-gold" /></span>
+          Схема
+        </label>
+        <label className="mt-2 flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] text-staff-mute">
+          <span className="h-4 w-4 rounded-full border border-staff-edge2" />
+          Рельеф
+        </label>
       </div>
-      <div className="absolute bottom-3 right-3 flex flex-col gap-1">
+
+      <div className="pointer-events-none absolute left-1/2 top-5 hidden -translate-x-1/2 rounded-sm border border-staff-edge/50 bg-black/25 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-staff-ink-dim backdrop-blur-sm xl:block">
+        Перетаскивайте карту · колесо — масштаб · клик — выбор гекса
+      </div>
+
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+        <button className="tactical-chip px-5 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-staff-ink-dim hover:text-staff-gold">
+          ▱ Фильтры
+        </button>
+      </div>
+
+      <div className="absolute bottom-4 right-4 flex flex-col gap-1.5">
         <button
           onClick={() => zoomBy(1.2)}
-          className="h-8 w-8 rounded bg-staff-panel/90 text-lg leading-none text-staff-ink shadow hover:bg-staff-panel2"
+          className="tactical-chip h-9 w-9 text-xl leading-none text-staff-ink hover:text-staff-gold"
         >
           +
         </button>
         <button
           onClick={() => zoomBy(1 / 1.2)}
-          className="h-8 w-8 rounded bg-staff-panel/90 text-lg leading-none text-staff-ink shadow hover:bg-staff-panel2"
+          className="tactical-chip h-9 w-9 text-xl leading-none text-staff-ink hover:text-staff-gold"
         >
           −
         </button>
         <button
           onClick={refit}
-          className="h-8 w-8 rounded bg-staff-panel/90 text-[10px] text-staff-ink shadow hover:bg-staff-panel2"
+          className="tactical-chip h-9 w-9 text-[10px] text-staff-ink hover:text-staff-gold"
           title="Уместить карту"
         >
           ⤢
