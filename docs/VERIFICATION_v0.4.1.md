@@ -39,5 +39,8 @@ GitHub Actions для implementation commit `accd8ef`:
 - [pull request run 30486906594](https://github.com/resarytrew/GEKS2/actions/runs/30486906594) —
   успешно.
 
-Эти ссылки относятся к correctness commit до final hardening. Итоговые CI URLs
-будут записаны после публикации hardening commits.
+Final hardening:
+
+- [push run 30510099735](https://github.com/resarytrew/GEKS2/actions/runs/30510099735);
+- [PR merge-commit run 30510101995](https://github.com/resarytrew/GEKS2/actions/runs/30510101995) —
+  весь pipeline, включая production smoke, успешен.

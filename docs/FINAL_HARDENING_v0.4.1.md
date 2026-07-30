@@ -68,5 +68,10 @@
 | `npm audit --omit=dev` | 0 vulnerabilities |
 | `npm audit` | 13 dev-only findings |
 
-Итоговый SHA и GitHub Actions URLs будут добавлены после публикации hardening
-commits.
+Implementation SHA: `2d22bf3f31801d7183928827aa9bf69144cf3c0f`.
+
+GitHub Actions:
+
+- [push run 30510099735](https://github.com/resarytrew/GEKS2/actions/runs/30510099735);
+- [PR merge-commit run 30510101995](https://github.com/resarytrew/GEKS2/actions/runs/30510101995) —
+  все шаги, включая production smoke, успешны.
