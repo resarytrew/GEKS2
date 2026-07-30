@@ -17,12 +17,20 @@ import {
 } from "@/lib/labels";
 import type { UnitState } from "@/engine/types";
 
-export default function SidePanels() {
+export default function SidePanels({
+  tab: controlledTab,
+  onTabChange,
+}: {
+  tab?: OperationalTab;
+  onTabChange?: (tab: OperationalTab) => void;
+}) {
   const state = useGame((s) => s.state);
   const selectedHexId = useGame((s) => s.selectedHexId);
   const selectedUnitIds = useGame((s) => s.selectedUnitIds);
   const toggle = useGame((s) => s.toggleUnitInSelection);
-  const [tab, setTab] = useState<OperationalTab>("inspect");
+  const [internalTab, setInternalTab] = useState<OperationalTab>("inspect");
+  const tab = controlledTab ?? internalTab;
+  const setTab = onTabChange ?? setInternalTab;
   if (!state) return null;
   const hex = selectedHexId ? state.hexes[selectedHexId] : null;
   const stack = hex ? unitsAt(state, selectedHexId!) : [];

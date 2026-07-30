@@ -39,6 +39,15 @@ export default function PlayPage() {
     if (!state) router.replace("/");
   }, [state, router]);
 
+  const handoffPendingSide = state?.phase === "planning" && state.plans.germany.committed !== state.plans.ussr.committed ? state.activeSide : null;
+
+  useEffect(() => {
+    if (!handoffPendingSide) return;
+    // Remove the previous player's transient context before the sealed screen is visible.
+    useGame.getState().clearSelection();
+    useGame.getState().setPanel(null);
+  }, [handoffPendingSide]);
+
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -98,7 +107,7 @@ export default function PlayPage() {
           />
         </main>
 
-        <OperationalSheet selectedHexId={selectedHexId} hasSelectedUnits={selectedUnitIds.length > 0} />
+        <OperationalSheet key={`sheet:${state.activeSide}`} selectedHexId={selectedHexId} hasSelectedUnits={selectedUnitIds.length > 0} />
       </div>
       <BottomBar />
       <CombatPanel />
