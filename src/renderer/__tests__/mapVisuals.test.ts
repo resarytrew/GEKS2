@@ -15,6 +15,11 @@ import {
   layoutMapLabels,
   projectStack,
 } from "@/renderer/mapVisualModel";
+import {
+  getMapRenderBenchmark,
+  recordMapRenderSample,
+  resetMapRenderBenchmark,
+} from "@/renderer/mapPerformance";
 import { createInitialState } from "@/scenarios/baltic-1941/scenario";
 
 describe("operational map LOD", () => {
@@ -162,5 +167,20 @@ describe("layer preferences and cache policy", () => {
     expect(MAP_RENDER_INVALIDATION.selection).toEqual(["interaction"]);
     expect(MAP_RENDER_INVALIDATION.orders).toEqual(["operational"]);
     expect(MAP_RENDER_INVALIDATION.orders).not.toContain("terrain");
+  });
+});
+
+describe("map render benchmark", () => {
+  it("keeps a bounded sample window and reports deterministic percentiles", () => {
+    resetMapRenderBenchmark();
+    for (let value = 1; value <= 200; value++) {
+      recordMapRenderSample("dynamic", value);
+    }
+    const summary = getMapRenderBenchmark().dynamic;
+    expect(summary.samples).toBe(180);
+    expect(summary.latestMs).toBe(200);
+    expect(summary.medianMs).toBe(110);
+    expect(summary.p95Ms).toBe(191);
+    expect(summary.maxMs).toBe(200);
   });
 });

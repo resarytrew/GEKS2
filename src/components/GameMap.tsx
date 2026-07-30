@@ -19,6 +19,10 @@ import {
   type MapLayerPreferences,
   type MapLayerPresetId,
 } from "@/renderer/mapVisualConfig";
+import {
+  getMapRenderBenchmark,
+  recordMapRenderSample,
+} from "@/renderer/mapPerformance";
 import { HEX_SIZE, axialToPixel } from "@/engine/hex";
 import type { Reachable as Reach } from "@/engine/rules";
 import { Icon } from "@/components/Icon";
@@ -114,6 +118,12 @@ export default function GameMap({
     const resize = () => {
       const rect = parent.getBoundingClientRect();
       const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const previous = viewRef.current;
+      const dimensionsChanged =
+        Math.abs(previous.width - rect.width) > 0.5 ||
+        Math.abs(previous.height - rect.height) > 0.5 ||
+        previous.dpr !== dpr;
+      if (!dimensionsChanged && flagsRef.current.inited) return;
       viewRef.current = { width: rect.width, height: rect.height, dpr };
       const pixelWidth = Math.max(1, Math.round(rect.width * dpr));
       const pixelHeight = Math.max(1, Math.round(rect.height * dpr));
@@ -199,12 +209,17 @@ export default function GameMap({
       flags.needsRender = false;
       const vp = vpRef.current;
       const view = viewRef.current;
+      const frameStarted = performance.now();
       if (flags.terrainDirty) {
+        const started = performance.now();
         drawTerrainCache(terrainCtx, state, vp, view, preferences);
+        recordMapRenderSample("terrain", performance.now() - started);
         flags.terrainDirty = false;
       }
       if (flags.contextDirty) {
+        const started = performance.now();
         drawContextCache(contextCtx, state, vp, view, preferences);
+        recordMapRenderSample("context", performance.now() - started);
         flags.contextDirty = false;
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -223,7 +238,11 @@ export default function GameMap({
         showZOC,
         activeSide,
       };
+      const dynamicStarted = performance.now();
       drawDynamicLayer(ctx, state, vp, view, ui, preferences);
+      recordMapRenderSample("dynamic", performance.now() - dynamicStarted);
+      recordMapRenderSample("frame", performance.now() - frameStarted);
+      canvas.dataset.renderMetrics = JSON.stringify(getMapRenderBenchmark());
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -327,7 +346,7 @@ export default function GameMap({
       <div className="map-vignette" />
       <div className="map-grain" />
 
-      <div className="tactical-chip absolute left-4 top-4 w-[154px] p-3">
+      <div className="map-terrain-switcher tactical-chip absolute left-4 top-4 w-[154px] p-3">
         <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-staff-gold">Ландшафт</div>
         <button
           type="button"
@@ -357,7 +376,7 @@ export default function GameMap({
         Перетаскивайте карту · колесо — масштаб · клик — выбор гекса
       </div>
 
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+      <div className="map-filter-control absolute bottom-4 left-1/2 -translate-x-1/2">
         {filtersOpen && (
           <div className="tactical-chip absolute bottom-12 left-1/2 max-h-[min(70vh,520px)] w-72 -translate-x-1/2 overflow-y-auto p-3">
             <div className="staff-section-title mb-2">Профиль карты</div>
@@ -436,7 +455,7 @@ export default function GameMap({
         </button>
       </div>
 
-      <div className="absolute bottom-4 right-4 flex flex-col gap-1.5">
+      <div className="map-zoom-controls absolute bottom-4 right-4 flex flex-col gap-1.5">
         <button
           aria-label="Приблизить карту"
           onClick={() => zoomBy(1.2)}

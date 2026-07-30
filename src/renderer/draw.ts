@@ -415,10 +415,32 @@ export function drawControlLayer(
         ? preferences.highContrast
           ? "rgba(67,94,123,0.16)"
           : "rgba(66,84,106,0.085)"
-        : preferences.highContrast
-          ? "rgba(155,58,45,0.14)"
-          : "rgba(145,61,49,0.075)";
+        : hex.control === "ussr"
+          ? preferences.highContrast
+            ? "rgba(155,58,45,0.14)"
+            : "rgba(145,61,49,0.075)"
+          : "rgba(191,126,61,0.07)";
     ctx.fill();
+    if (hex.control === "contested") {
+      ctx.save();
+      hexPath(ctx, corners);
+      ctx.clip();
+      ctx.strokeStyle = preferences.highContrast
+        ? "rgba(232,155,76,0.52)"
+        : "rgba(184,119,56,0.3)";
+      ctx.lineWidth = 1;
+      const left = Math.min(...corners.map((corner) => corner.x));
+      const right = Math.max(...corners.map((corner) => corner.x));
+      const top = Math.min(...corners.map((corner) => corner.y));
+      const bottom = Math.max(...corners.map((corner) => corner.y));
+      for (let x = left - (bottom - top); x < right; x += 7) {
+        ctx.beginPath();
+        ctx.moveTo(x, bottom);
+        ctx.lineTo(x + (bottom - top), top);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
   }
 }
 
@@ -551,21 +573,21 @@ export function drawTransportLayer(
       ctx.strokeStyle = "rgba(157,124,75,0.66)";
       ctx.lineWidth = Math.max(0.7, vp.scale * 1.05);
       ctx.setLineDash([3, 2]);
-      for (const id of projection.ids) drawEdgeLines(ctx, state.hexes[id], vp, "road");
+      for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "road");
       ctx.setLineDash([]);
     }
     ctx.strokeStyle = "rgba(211,166,88,0.78)";
     ctx.lineWidth = Math.max(1.2, vp.scale * 2.05);
-    for (const id of projection.ids) drawEdgeLines(ctx, state.hexes[id], vp, "major");
+    for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "major");
   }
   if (preferences.showRailways) {
     ctx.strokeStyle = "rgba(28,23,18,0.88)";
     ctx.lineWidth = Math.max(1.1, vp.scale * 1.6);
-    for (const id of projection.ids) drawEdgeLines(ctx, state.hexes[id], vp, "rail");
+    for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "rail");
     ctx.strokeStyle = "rgba(210,194,146,0.54)";
     ctx.lineWidth = Math.max(0.55, vp.scale * 0.65);
     ctx.setLineDash([3.5, 3.5]);
-    for (const id of projection.ids) drawEdgeLines(ctx, state.hexes[id], vp, "rail");
+    for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "rail");
     ctx.setLineDash([]);
   }
   ctx.restore();
@@ -729,13 +751,30 @@ export function drawContextCache(
   drawFrontlineLayer(ctx, state, vp, projection, preferences);
 }
 
-function drawEdgeLines(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport, kind: "road" | "major" | "rail"): void {
+function drawEdgeLines(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  h: HexState,
+  vp: Viewport,
+  kind: "road" | "major" | "rail",
+): void {
   const edges = kind === "road" ? h.roadEdges : kind === "major" ? h.majorRoadEdges : h.railwayEdges;
   const p = axialToPixel(h.q, h.r, HEX_SIZE);
   for (const e of edges) {
     const m = edgeMidpoint(h.q, h.r, e, HEX_SIZE);
-    const from = worldToScreen(p.x + (m.x - p.x) * 0.5, p.y + (m.y - p.y) * 0.5, vp);
-    const to = worldToScreen(m.x, m.y, vp);
+    const adjacentAxial = pixelToAxial(m.x * 2 - p.x, m.y * 2 - p.y, HEX_SIZE);
+    const adjacent = state.hexes[`${adjacentAxial.q}_${adjacentAxial.r}`];
+    if (!adjacent || h.id.localeCompare(adjacent.id) >= 0) continue;
+    const reverseEdges =
+      kind === "road"
+        ? adjacent.roadEdges
+        : kind === "major"
+          ? adjacent.majorRoadEdges
+          : adjacent.railwayEdges;
+    if (!reverseEdges.includes((e + 3) % 6)) continue;
+    const from = worldToScreen(p.x, p.y, vp);
+    const adjacentCenter = axialToPixel(adjacent.q, adjacent.r, HEX_SIZE);
+    const to = worldToScreen(adjacentCenter.x, adjacentCenter.y, vp);
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);

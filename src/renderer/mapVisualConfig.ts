@@ -47,7 +47,7 @@ export const MAP_VISUAL_LOD: Record<MapLod, MapVisualLodConfig> = {
     gridLineWidth: 0.55,
     coordinateOpacity: 0.12,
     coordinateStride: 3,
-    showMinorRoads: true,
+    showMinorRoads: false,
     showRegionalSettlements: true,
     showMinorSettlements: false,
     showTerrainPattern: false,
