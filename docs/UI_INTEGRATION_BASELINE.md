@@ -10,7 +10,7 @@
 
 | Command | Result |
 |---|---|
-| `npm ci` | not rerun after integration: before merge it was blocked on the old v0.3 lockfile. The v0.4 lockfile has been merged from `origin/main`; clean CI should be validated separately in a clean checkout. |
+| `npm ci` | passed after regenerating the lockfile and deleting `node_modules`; the clean install was followed by the full verification suite. |
 | `npm run typecheck` | passed |
 | `npm run lint` | passed |
 | `npm test -- --run` | passed: 9 files, 182 tests |

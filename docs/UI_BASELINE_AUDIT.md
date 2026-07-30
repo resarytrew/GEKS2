@@ -7,7 +7,7 @@
 - **Shared merge base:** `91040c168e021d56d870cb2cca00b48669591f32`.
 - **Runtime:** Node `v22.22.3`, npm `10.9.8`.
 - **Authoritative version tuple:** schema 4, engine 0.4.0, scenario 0.4.0.
-- **Checks after integration:** typecheck/lint/build pass; 9 test files and 182 tests pass. The old v0.3 `npm ci` lock mismatch was not imported; clean v0.4 lockfile validation remains CI work.
+- **Checks after integration:** typecheck/lint/build pass. The lockfile was regenerated and verified with a clean `npm ci`; current test counts are maintained by the verification report/CI output.
 
 ## UI inventory
 
