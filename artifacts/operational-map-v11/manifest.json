@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-30T07:51:43.417Z",
+  "generatedAt": "2026-07-30T08:05:13.362Z",
   "baseUrl": "http://localhost:3000",
   "browser": "Microsoft Edge / Chromium",
   "captures": [
@@ -13,31 +13,31 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 15.3,
-          "medianMs": 15.3,
-          "p95Ms": 15.3,
-          "maxMs": 15.3
+          "latestMs": 16,
+          "medianMs": 16,
+          "p95Ms": 16,
+          "maxMs": 16
         },
         "context": {
           "samples": 1,
-          "latestMs": 22.8,
-          "medianMs": 22.8,
-          "p95Ms": 22.8,
-          "maxMs": 22.8
+          "latestMs": 22.2,
+          "medianMs": 22.2,
+          "p95Ms": 22.2,
+          "maxMs": 22.2
         },
         "dynamic": {
           "samples": 1,
-          "latestMs": 3.7,
-          "medianMs": 3.7,
-          "p95Ms": 3.7,
-          "maxMs": 3.7
+          "latestMs": 4.2,
+          "medianMs": 4.2,
+          "p95Ms": 4.2,
+          "maxMs": 4.2
         },
         "frame": {
           "samples": 1,
-          "latestMs": 49.7,
-          "medianMs": 49.7,
-          "p95Ms": 49.7,
-          "maxMs": 49.7
+          "latestMs": 50.6,
+          "medianMs": 50.6,
+          "p95Ms": 50.6,
+          "maxMs": 50.6
         }
       }
     },
@@ -51,31 +51,31 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 8.9,
-          "medianMs": 8.9,
-          "p95Ms": 8.9,
-          "maxMs": 8.9
+          "latestMs": 8.2,
+          "medianMs": 8.2,
+          "p95Ms": 8.2,
+          "maxMs": 8.2
         },
         "context": {
           "samples": 1,
-          "latestMs": 22.7,
-          "medianMs": 22.7,
-          "p95Ms": 22.7,
-          "maxMs": 22.7
+          "latestMs": 22.5,
+          "medianMs": 22.5,
+          "p95Ms": 22.5,
+          "maxMs": 22.5
         },
         "dynamic": {
           "samples": 1,
-          "latestMs": 3.8,
-          "medianMs": 3.8,
-          "p95Ms": 3.8,
-          "maxMs": 3.8
+          "latestMs": 4.2,
+          "medianMs": 4.2,
+          "p95Ms": 4.2,
+          "maxMs": 4.2
         },
         "frame": {
           "samples": 1,
-          "latestMs": 43.3,
-          "medianMs": 43.3,
-          "p95Ms": 43.3,
-          "maxMs": 43.3
+          "latestMs": 43.2,
+          "medianMs": 43.2,
+          "p95Ms": 43.2,
+          "maxMs": 43.2
         }
       }
     },
@@ -89,31 +89,31 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 8.1,
-          "medianMs": 8.1,
-          "p95Ms": 8.1,
-          "maxMs": 8.1
+          "latestMs": 9,
+          "medianMs": 9,
+          "p95Ms": 9,
+          "maxMs": 9
         },
         "context": {
           "samples": 1,
-          "latestMs": 21.2,
-          "medianMs": 21.2,
-          "p95Ms": 21.2,
-          "maxMs": 21.2
+          "latestMs": 24.8,
+          "medianMs": 24.8,
+          "p95Ms": 24.8,
+          "maxMs": 24.8
         },
         "dynamic": {
           "samples": 1,
-          "latestMs": 4.9,
-          "medianMs": 4.9,
-          "p95Ms": 4.9,
-          "maxMs": 4.9
+          "latestMs": 4.2,
+          "medianMs": 4.2,
+          "p95Ms": 4.2,
+          "maxMs": 4.2
         },
         "frame": {
           "samples": 1,
-          "latestMs": 42,
-          "medianMs": 42,
-          "p95Ms": 42,
-          "maxMs": 42
+          "latestMs": 46.3,
+          "medianMs": 46.3,
+          "p95Ms": 46.3,
+          "maxMs": 46.3
         }
       }
     },
@@ -127,31 +127,31 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 8.6,
-          "medianMs": 8.6,
-          "p95Ms": 8.6,
-          "maxMs": 8.6
+          "latestMs": 9.7,
+          "medianMs": 9.7,
+          "p95Ms": 9.7,
+          "maxMs": 9.7
         },
         "context": {
           "samples": 1,
-          "latestMs": 22.9,
-          "medianMs": 22.9,
-          "p95Ms": 22.9,
-          "maxMs": 22.9
+          "latestMs": 23.5,
+          "medianMs": 23.5,
+          "p95Ms": 23.5,
+          "maxMs": 23.5
         },
         "dynamic": {
           "samples": 1,
-          "latestMs": 5.2,
-          "medianMs": 5.2,
-          "p95Ms": 5.2,
-          "maxMs": 5.2
+          "latestMs": 5,
+          "medianMs": 5,
+          "p95Ms": 5,
+          "maxMs": 5
         },
         "frame": {
           "samples": 1,
-          "latestMs": 45.2,
-          "medianMs": 45.2,
-          "p95Ms": 45.2,
-          "maxMs": 45.2
+          "latestMs": 46.4,
+          "medianMs": 46.4,
+          "p95Ms": 46.4,
+          "maxMs": 46.4
         }
       }
     },
@@ -165,17 +165,17 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 5.2,
-          "medianMs": 5.2,
-          "p95Ms": 5.2,
-          "maxMs": 5.2
+          "latestMs": 5.7,
+          "medianMs": 5.7,
+          "p95Ms": 5.7,
+          "maxMs": 5.7
         },
         "context": {
           "samples": 1,
-          "latestMs": 14.5,
-          "medianMs": 14.5,
-          "p95Ms": 14.5,
-          "maxMs": 14.5
+          "latestMs": 16.5,
+          "medianMs": 16.5,
+          "p95Ms": 16.5,
+          "maxMs": 16.5
         },
         "dynamic": {
           "samples": 1,
@@ -186,10 +186,10 @@
         },
         "frame": {
           "samples": 1,
-          "latestMs": 24.8,
-          "medianMs": 24.8,
-          "p95Ms": 24.8,
-          "maxMs": 24.8
+          "latestMs": 27.2,
+          "medianMs": 27.2,
+          "p95Ms": 27.2,
+          "maxMs": 27.2
         }
       }
     },
@@ -203,31 +203,31 @@
       "metrics": {
         "terrain": {
           "samples": 2,
-          "latestMs": 5.8,
-          "medianMs": 5.8,
-          "p95Ms": 5.8,
-          "maxMs": 11.5
+          "latestMs": 5.1,
+          "medianMs": 5.1,
+          "p95Ms": 5.1,
+          "maxMs": 8
         },
         "context": {
           "samples": 2,
-          "latestMs": 10.5,
-          "medianMs": 10.5,
-          "p95Ms": 10.5,
-          "maxMs": 24.9
+          "latestMs": 9.5,
+          "medianMs": 9.5,
+          "p95Ms": 9.5,
+          "maxMs": 23
         },
         "dynamic": {
           "samples": 2,
-          "latestMs": 2.1,
-          "medianMs": 2.1,
-          "p95Ms": 2.1,
+          "latestMs": 2.2,
+          "medianMs": 2.2,
+          "p95Ms": 2.2,
           "maxMs": 3.8
         },
         "frame": {
           "samples": 2,
-          "latestMs": 20.6,
-          "medianMs": 20.6,
-          "p95Ms": 20.6,
-          "maxMs": 48.2
+          "latestMs": 18.9,
+          "medianMs": 18.9,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
         }
       }
     },
@@ -241,31 +241,31 @@
       "metrics": {
         "terrain": {
           "samples": 6,
-          "latestMs": 2,
-          "medianMs": 2.9,
-          "p95Ms": 5.8,
-          "maxMs": 11.5
+          "latestMs": 2.7,
+          "medianMs": 3.2,
+          "p95Ms": 5.1,
+          "maxMs": 8
         },
         "context": {
           "samples": 6,
-          "latestMs": 4.3,
-          "medianMs": 8.7,
-          "p95Ms": 10.5,
-          "maxMs": 24.9
+          "latestMs": 4.7,
+          "medianMs": 8.1,
+          "p95Ms": 9.7,
+          "maxMs": 23
         },
         "dynamic": {
           "samples": 6,
           "latestMs": 1,
-          "medianMs": 1.1,
-          "p95Ms": 3,
+          "medianMs": 1.2,
+          "p95Ms": 2.7,
           "maxMs": 3.8
         },
         "frame": {
           "samples": 6,
-          "latestMs": 9.5,
-          "medianMs": 18,
-          "p95Ms": 20.6,
-          "maxMs": 48.2
+          "latestMs": 10.6,
+          "medianMs": 17.6,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
         }
       }
     },
@@ -279,31 +279,31 @@
       "metrics": {
         "terrain": {
           "samples": 7,
-          "latestMs": 1.9,
-          "medianMs": 2.9,
-          "p95Ms": 5.8,
-          "maxMs": 11.5
+          "latestMs": 2,
+          "medianMs": 3.2,
+          "p95Ms": 5.1,
+          "maxMs": 8
         },
         "context": {
           "samples": 7,
-          "latestMs": 1.9,
-          "medianMs": 8.7,
-          "p95Ms": 10.5,
-          "maxMs": 24.9
+          "latestMs": 2.6,
+          "medianMs": 8.1,
+          "p95Ms": 9.7,
+          "maxMs": 23
         },
         "dynamic": {
           "samples": 7,
-          "latestMs": 0.6,
-          "medianMs": 1.1,
-          "p95Ms": 3,
+          "latestMs": 0.7,
+          "medianMs": 1.2,
+          "p95Ms": 2.7,
           "maxMs": 3.8
         },
         "frame": {
           "samples": 7,
-          "latestMs": 4.6,
-          "medianMs": 18,
-          "p95Ms": 20.6,
-          "maxMs": 48.2
+          "latestMs": 5.6,
+          "medianMs": 17.6,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
         }
       }
     },
@@ -317,31 +317,31 @@
       "metrics": {
         "terrain": {
           "samples": 7,
-          "latestMs": 1.9,
-          "medianMs": 2.9,
-          "p95Ms": 5.8,
-          "maxMs": 11.5
+          "latestMs": 2,
+          "medianMs": 3.2,
+          "p95Ms": 5.1,
+          "maxMs": 8
         },
         "context": {
           "samples": 7,
-          "latestMs": 1.9,
-          "medianMs": 8.7,
-          "p95Ms": 10.5,
-          "maxMs": 24.9
+          "latestMs": 2.6,
+          "medianMs": 8.1,
+          "p95Ms": 9.7,
+          "maxMs": 23
         },
         "dynamic": {
           "samples": 7,
-          "latestMs": 0.6,
-          "medianMs": 1.1,
-          "p95Ms": 3,
+          "latestMs": 0.7,
+          "medianMs": 1.2,
+          "p95Ms": 2.7,
           "maxMs": 3.8
         },
         "frame": {
           "samples": 7,
-          "latestMs": 4.6,
-          "medianMs": 18,
-          "p95Ms": 20.6,
-          "maxMs": 48.2
+          "latestMs": 5.6,
+          "medianMs": 17.6,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
         }
       }
     },
@@ -355,31 +355,31 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 7.5,
-          "medianMs": 7.5,
-          "p95Ms": 7.5,
-          "maxMs": 7.5
+          "latestMs": 8.3,
+          "medianMs": 8.3,
+          "p95Ms": 8.3,
+          "maxMs": 8.3
         },
         "context": {
           "samples": 1,
-          "latestMs": 24.1,
-          "medianMs": 24.1,
-          "p95Ms": 24.1,
-          "maxMs": 24.1
+          "latestMs": 23.9,
+          "medianMs": 23.9,
+          "p95Ms": 23.9,
+          "maxMs": 23.9
         },
         "dynamic": {
           "samples": 2,
-          "latestMs": 1,
-          "medianMs": 1,
-          "p95Ms": 1,
-          "maxMs": 3.6
+          "latestMs": 1.1,
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 3.7
         },
         "frame": {
           "samples": 2,
-          "latestMs": 1,
-          "medianMs": 1,
-          "p95Ms": 1,
-          "maxMs": 43
+          "latestMs": 1.1,
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 43.8
         }
       }
     },
@@ -393,31 +393,31 @@
       "metrics": {
         "terrain": {
           "samples": 1,
-          "latestMs": 7.5,
-          "medianMs": 7.5,
-          "p95Ms": 7.5,
-          "maxMs": 7.5
+          "latestMs": 8.3,
+          "medianMs": 8.3,
+          "p95Ms": 8.3,
+          "maxMs": 8.3
         },
         "context": {
           "samples": 1,
-          "latestMs": 24.1,
-          "medianMs": 24.1,
-          "p95Ms": 24.1,
-          "maxMs": 24.1
+          "latestMs": 23.9,
+          "medianMs": 23.9,
+          "p95Ms": 23.9,
+          "maxMs": 23.9
         },
         "dynamic": {
           "samples": 3,
           "latestMs": 0.9,
-          "medianMs": 1,
-          "p95Ms": 1,
-          "maxMs": 3.6
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 3.7
         },
         "frame": {
           "samples": 3,
           "latestMs": 0.9,
-          "medianMs": 1,
-          "p95Ms": 1,
-          "maxMs": 43
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 43.8
         }
       }
     },
@@ -434,28 +434,28 @@
           "latestMs": 2,
           "medianMs": 2,
           "p95Ms": 2,
-          "maxMs": 9.2
+          "maxMs": 8
         },
         "context": {
           "samples": 4,
           "latestMs": 4.3,
-          "medianMs": 5.8,
-          "p95Ms": 7,
-          "maxMs": 23
+          "medianMs": 4.6,
+          "p95Ms": 7.5,
+          "maxMs": 23.3
         },
         "dynamic": {
           "samples": 5,
-          "latestMs": 0.9,
-          "medianMs": 0.9,
-          "p95Ms": 1.1,
-          "maxMs": 3.7
+          "latestMs": 1.2,
+          "medianMs": 1,
+          "p95Ms": 1.2,
+          "maxMs": 3.8
         },
         "frame": {
           "samples": 5,
-          "latestMs": 1,
-          "medianMs": 8.4,
-          "p95Ms": 9.5,
-          "maxMs": 44.3
+          "latestMs": 1.2,
+          "medianMs": 7.9,
+          "p95Ms": 9,
+          "maxMs": 43.1
         }
       }
     },
@@ -472,28 +472,28 @@
           "latestMs": 2,
           "medianMs": 2,
           "p95Ms": 2,
-          "maxMs": 9.2
+          "maxMs": 8
         },
         "context": {
           "samples": 4,
           "latestMs": 4.3,
-          "medianMs": 5.8,
-          "p95Ms": 7,
-          "maxMs": 23
+          "medianMs": 4.6,
+          "p95Ms": 7.5,
+          "maxMs": 23.3
         },
         "dynamic": {
           "samples": 5,
-          "latestMs": 0.9,
-          "medianMs": 0.9,
-          "p95Ms": 1.1,
-          "maxMs": 3.7
+          "latestMs": 1.2,
+          "medianMs": 1,
+          "p95Ms": 1.2,
+          "maxMs": 3.8
         },
         "frame": {
           "samples": 5,
-          "latestMs": 1,
-          "medianMs": 8.4,
-          "p95Ms": 9.5,
-          "maxMs": 44.3
+          "latestMs": 1.2,
+          "medianMs": 7.9,
+          "p95Ms": 9,
+          "maxMs": 43.1
         }
       }
     },
@@ -510,28 +510,28 @@
           "latestMs": 2,
           "medianMs": 2,
           "p95Ms": 2,
-          "maxMs": 9.2
+          "maxMs": 8
         },
         "context": {
           "samples": 4,
           "latestMs": 4.3,
-          "medianMs": 5.8,
-          "p95Ms": 7,
-          "maxMs": 23
+          "medianMs": 4.6,
+          "p95Ms": 7.5,
+          "maxMs": 23.3
         },
         "dynamic": {
           "samples": 5,
-          "latestMs": 0.9,
-          "medianMs": 0.9,
-          "p95Ms": 1.1,
-          "maxMs": 3.7
+          "latestMs": 1.2,
+          "medianMs": 1,
+          "p95Ms": 1.2,
+          "maxMs": 3.8
         },
         "frame": {
           "samples": 5,
-          "latestMs": 1,
-          "medianMs": 8.4,
-          "p95Ms": 9.5,
-          "maxMs": 44.3
+          "latestMs": 1.2,
+          "medianMs": 7.9,
+          "p95Ms": 9,
+          "maxMs": 43.1
         }
       }
     }
