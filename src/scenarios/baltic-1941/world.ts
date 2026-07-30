@@ -16,6 +16,7 @@
 import type { HexState, Terrain, Control, Settlement, Bridge } from "@/engine/types";
 import {
   HEX_SIZE,
+  SQRT3,
   keyOf,
   axialToPixel,
   neighbors,
@@ -48,6 +49,20 @@ export function lonLatToAxial(lon: number, lat: number): Axial {
   const col = Math.max(0, Math.min(MAP.cols - 1, Math.round(u * (MAP.cols - 1))));
   const row = Math.max(0, Math.min(MAP.rows - 1, Math.round(v * (MAP.rows - 1))));
   return offsetToAxial(col, row);
+}
+
+/**
+ * Smooth theatre projection for cartographic vectors. Hex centres retain their
+ * odd-column stagger, while coastlines and rivers must not zig-zag between
+ * those centres.
+ */
+export function lonLatToWorldPixel(lon: number, lat: number): { x: number; y: number } {
+  const u = (lon - MAP.lonMin) / LON_SPAN;
+  const v = (MAP.latMax - lat) / LAT_SPAN;
+  return {
+    x: HEX_SIZE * 1.5 * u * (MAP.cols - 1),
+    y: HEX_SIZE * SQRT3 * (v * (MAP.rows - 1) + 0.25),
+  };
 }
 
 type Poly = number[][];

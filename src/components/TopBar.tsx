@@ -4,6 +4,7 @@ import { useGame } from "@/store/gameStore";
 import { SCENARIO } from "@/scenarios/baltic-1941/scenario";
 import { PHASE_LABEL, SIDE_SHORT, ordinalTurn } from "@/lib/labels";
 import type { GamePhase, Side } from "@/engine/types";
+import { Icon } from "@/components/Icon";
 
 function scoreOf(s: ReturnType<typeof useGame.getState>["state"], side: Side): number {
   if (!s) return 0;
@@ -80,13 +81,12 @@ export default function TopBar() {
 
   return (
     <header className="staff-topbar ops-layer flex h-[68px] shrink-0 items-stretch border-b border-staff-edge/80 text-staff-ink">
-      <div className="flex w-[390px] min-w-0 items-center gap-4 border-r border-staff-edge/70 pl-6 pr-5">
-        <div className="relative flex h-12 w-12 shrink-0 items-center justify-center border border-staff-gold/25 bg-sov-dark text-staff-gold shadow-[0_8px_20px_rgba(0,0,0,0.35)]">
-          <span className="text-2xl">☆</span>
-          <span className="absolute bottom-1 right-1 h-1.5 w-1.5 bg-staff-gold/75" />
+      <div className="flex w-[380px] min-w-0 items-center gap-4 border-r border-staff-edge/70 pl-6 pr-5">
+        <div className="brand-standard flex h-12 w-12 shrink-0 items-center justify-center text-staff-gold">
+          <Icon name="star" className="h-8 w-8" />
         </div>
         <div className="min-w-0">
-          <div className="truncate text-lg font-bold uppercase leading-tight tracking-[0.12em] text-staff-ink">
+          <div className="truncate text-[16px] font-bold uppercase leading-tight tracking-[0.11em] text-staff-ink">
             Северо-Западный фронт
           </div>
           <div className="mt-1 text-[10px] uppercase tracking-[0.34em] text-staff-mute">
@@ -110,7 +110,9 @@ export default function TopBar() {
       </div>
 
       <div className="hidden w-[180px] shrink-0 items-center gap-3 border-r border-staff-edge/60 px-4 lg:flex">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-staff-gold/30 text-staff-gold">★</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-full border border-staff-gold/30 text-staff-gold">
+          <Icon name="star" className="h-5 w-5" />
+        </span>
         <div>
           <div className="text-[9px] uppercase tracking-[0.16em] text-staff-mute">Очки командования</div>
           <div className="tabular text-base font-bold text-staff-ink">{cp} / {cpMax} КО</div>
@@ -121,7 +123,7 @@ export default function TopBar() {
         <button
           onClick={onNext}
           disabled={state.status === "completed"}
-          className="border border-staff-gold/30 bg-staff-panel2 px-5 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-staff-ink shadow-[inset_0_1px_rgba(255,255,255,0.05)] transition hover:border-staff-gold hover:bg-staff-gold hover:text-staff-void disabled:cursor-not-allowed disabled:opacity-40"
+          className="border border-staff-gold/30 bg-staff-panel2 px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.16em] text-staff-ink shadow-[inset_0_1px_rgba(255,255,255,0.05)] hover:border-staff-gold hover:bg-staff-gold hover:text-staff-void disabled:cursor-not-allowed disabled:opacity-40"
         >
           {nextLabel(state.phase, state.status === "completed")}
         </button>

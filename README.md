@@ -61,9 +61,32 @@ npm run smoke:production
 
 Старый последовательный цикл сохранён только как режим `legacy_debug`.
 
+## Operational Map UI v1.1
+
+The operational map uses a 13-layer Canvas pipeline with separate terrain and
+context caches, spatial axial viewport culling and one authoritative far /
+medium / close LOD configuration. Natural Earth-derived vectors provide the
+continuous coastline, lakes and named river centre-lines; gameplay river and
+bridge rules remain hex-edge based.
+
+Map filters include operational, terrain, supply and service presets. Display
+preferences are stored locally and never enter authoritative `GameState`.
+
+```powershell
+npm run capture:map-v11
+```
+
+This command creates deterministic Chromium screenshots and render metrics in
+`artifacts/operational-map-v11/`.
+
 ## Архитектура и правила
 
 - [Архитектура](docs/ARCHITECTURE.md)
+- [Operational Map v1.1 architecture](docs/OPERATIONAL_MAP_V11_ARCHITECTURE.md)
+- [Operational Map v1.1 visual system](docs/OPERATIONAL_MAP_V11_VISUAL_SYSTEM.md)
+- [Operational Map v1.1 LOD](docs/OPERATIONAL_MAP_V11_LOD.md)
+- [Operational Map v1.1 performance](docs/OPERATIONAL_MAP_V11_PERFORMANCE.md)
+- [Operational Map v1.1 verification](docs/OPERATIONAL_MAP_V11_VERIFICATION.md)
 - [Правила ядра](docs/GAME_RULES_CORE.md)
 - [Модель WEGO](docs/WEGO_EXECUTION_MODEL.md)
 - [Историко-редакционная хартия](docs/HISTORICAL_EDITORIAL_CHARTER.md)

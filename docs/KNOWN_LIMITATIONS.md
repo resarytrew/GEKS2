@@ -15,6 +15,15 @@
   and drizzle-kit dependency chains; see `DEPENDENCY_AUDIT_v0.4.1.md`.
 - Production smoke proves a local server only; no external deployment has been
   created or verified.
+- Operational Map v1.1 uses continuous Natural Earth-derived coast/lake/river
+  vectors for presentation, but movement and crossing rules still use the
+  scenario's hex-edge reconstruction.
+- Minor road and railway rendering requires reciprocal adjacent edge data.
+  One-sided transport fragments are intentionally suppressed instead of being
+  displayed as disconnected decorative strokes.
+- Screenshot acceptance is deterministic for the bundled Raseiniai fixture,
+  but is not a cross-platform pixel-golden suite because Canvas text and
+  anti-aliasing vary by operating system.
 
 - Нет точной архивной карты театра: география, дороги, железные дороги,
   болота, реки, мосты и координаты частей реконструированы.

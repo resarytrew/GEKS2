@@ -1,0 +1,539 @@
+{
+  "generatedAt": "2026-07-30T08:05:13.362Z",
+  "baseUrl": "http://localhost:3000",
+  "browser": "Microsoft Edge / Chromium",
+  "captures": [
+    {
+      "file": "1920x1080-medium.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "medium LOD",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 16,
+          "medianMs": 16,
+          "p95Ms": 16,
+          "maxMs": 16
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 22.2,
+          "medianMs": 22.2,
+          "p95Ms": 22.2,
+          "maxMs": 22.2
+        },
+        "dynamic": {
+          "samples": 1,
+          "latestMs": 4.2,
+          "medianMs": 4.2,
+          "p95Ms": 4.2,
+          "maxMs": 4.2
+        },
+        "frame": {
+          "samples": 1,
+          "latestMs": 50.6,
+          "medianMs": 50.6,
+          "p95Ms": 50.6,
+          "maxMs": 50.6
+        }
+      }
+    },
+    {
+      "file": "1440x900-medium.png",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "state": "medium LOD",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 8.2,
+          "medianMs": 8.2,
+          "p95Ms": 8.2,
+          "maxMs": 8.2
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 22.5,
+          "medianMs": 22.5,
+          "p95Ms": 22.5,
+          "maxMs": 22.5
+        },
+        "dynamic": {
+          "samples": 1,
+          "latestMs": 4.2,
+          "medianMs": 4.2,
+          "p95Ms": 4.2,
+          "maxMs": 4.2
+        },
+        "frame": {
+          "samples": 1,
+          "latestMs": 43.2,
+          "medianMs": 43.2,
+          "p95Ms": 43.2,
+          "maxMs": 43.2
+        }
+      }
+    },
+    {
+      "file": "1280x720-medium.png",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "state": "medium LOD",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 9,
+          "medianMs": 9,
+          "p95Ms": 9,
+          "maxMs": 9
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 24.8,
+          "medianMs": 24.8,
+          "p95Ms": 24.8,
+          "maxMs": 24.8
+        },
+        "dynamic": {
+          "samples": 1,
+          "latestMs": 4.2,
+          "medianMs": 4.2,
+          "p95Ms": 4.2,
+          "maxMs": 4.2
+        },
+        "frame": {
+          "samples": 1,
+          "latestMs": 46.3,
+          "medianMs": 46.3,
+          "p95Ms": 46.3,
+          "maxMs": 46.3
+        }
+      }
+    },
+    {
+      "file": "1024x768-medium.png",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "state": "medium LOD",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 9.7,
+          "medianMs": 9.7,
+          "p95Ms": 9.7,
+          "maxMs": 9.7
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 23.5,
+          "medianMs": 23.5,
+          "p95Ms": 23.5,
+          "maxMs": 23.5
+        },
+        "dynamic": {
+          "samples": 1,
+          "latestMs": 5,
+          "medianMs": 5,
+          "p95Ms": 5,
+          "maxMs": 5
+        },
+        "frame": {
+          "samples": 1,
+          "latestMs": 46.4,
+          "medianMs": 46.4,
+          "p95Ms": 46.4,
+          "maxMs": 46.4
+        }
+      }
+    },
+    {
+      "file": "390x844-medium.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "mobile medium LOD",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 5.7,
+          "medianMs": 5.7,
+          "p95Ms": 5.7,
+          "maxMs": 5.7
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 16.5,
+          "medianMs": 16.5,
+          "p95Ms": 16.5,
+          "maxMs": 16.5
+        },
+        "dynamic": {
+          "samples": 1,
+          "latestMs": 2.8,
+          "medianMs": 2.8,
+          "p95Ms": 2.8,
+          "maxMs": 2.8
+        },
+        "frame": {
+          "samples": 1,
+          "latestMs": 27.2,
+          "medianMs": 27.2,
+          "p95Ms": 27.2,
+          "maxMs": 27.2
+        }
+      }
+    },
+    {
+      "file": "1920x1080-far.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "full map / far LOD",
+      "metrics": {
+        "terrain": {
+          "samples": 2,
+          "latestMs": 5.1,
+          "medianMs": 5.1,
+          "p95Ms": 5.1,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 2,
+          "latestMs": 9.5,
+          "medianMs": 9.5,
+          "p95Ms": 9.5,
+          "maxMs": 23
+        },
+        "dynamic": {
+          "samples": 2,
+          "latestMs": 2.2,
+          "medianMs": 2.2,
+          "p95Ms": 2.2,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 2,
+          "latestMs": 18.9,
+          "medianMs": 18.9,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
+        }
+      }
+    },
+    {
+      "file": "1920x1080-close.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "close LOD / coordinates",
+      "metrics": {
+        "terrain": {
+          "samples": 6,
+          "latestMs": 2.7,
+          "medianMs": 3.2,
+          "p95Ms": 5.1,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 6,
+          "latestMs": 4.7,
+          "medianMs": 8.1,
+          "p95Ms": 9.7,
+          "maxMs": 23
+        },
+        "dynamic": {
+          "samples": 6,
+          "latestMs": 1,
+          "medianMs": 1.2,
+          "p95Ms": 2.7,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 6,
+          "latestMs": 10.6,
+          "medianMs": 17.6,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
+        }
+      }
+    },
+    {
+      "file": "1920x1080-supply.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "supply preset",
+      "metrics": {
+        "terrain": {
+          "samples": 7,
+          "latestMs": 2,
+          "medianMs": 3.2,
+          "p95Ms": 5.1,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 7,
+          "latestMs": 2.6,
+          "medianMs": 8.1,
+          "p95Ms": 9.7,
+          "maxMs": 23
+        },
+        "dynamic": {
+          "samples": 7,
+          "latestMs": 0.7,
+          "medianMs": 1.2,
+          "p95Ms": 2.7,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 7,
+          "latestMs": 5.6,
+          "medianMs": 17.6,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
+        }
+      }
+    },
+    {
+      "file": "1920x1080-grid-off.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "hex grid disabled",
+      "metrics": {
+        "terrain": {
+          "samples": 7,
+          "latestMs": 2,
+          "medianMs": 3.2,
+          "p95Ms": 5.1,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 7,
+          "latestMs": 2.6,
+          "medianMs": 8.1,
+          "p95Ms": 9.7,
+          "maxMs": 23
+        },
+        "dynamic": {
+          "samples": 7,
+          "latestMs": 0.7,
+          "medianMs": 1.2,
+          "p95Ms": 2.7,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 7,
+          "latestMs": 5.6,
+          "medianMs": 17.6,
+          "p95Ms": 18.9,
+          "maxMs": 42.8
+        }
+      }
+    },
+    {
+      "file": "1920x1080-selected-german.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "selected German formation / reachable projection",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 8.3,
+          "medianMs": 8.3,
+          "p95Ms": 8.3,
+          "maxMs": 8.3
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 23.9,
+          "medianMs": 23.9,
+          "p95Ms": 23.9,
+          "maxMs": 23.9
+        },
+        "dynamic": {
+          "samples": 2,
+          "latestMs": 1.1,
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 3.7
+        },
+        "frame": {
+          "samples": 2,
+          "latestMs": 1.1,
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 43.8
+        }
+      }
+    },
+    {
+      "file": "1920x1080-attack-target.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "enemy formation / attack target",
+      "metrics": {
+        "terrain": {
+          "samples": 1,
+          "latestMs": 8.3,
+          "medianMs": 8.3,
+          "p95Ms": 8.3,
+          "maxMs": 8.3
+        },
+        "context": {
+          "samples": 1,
+          "latestMs": 23.9,
+          "medianMs": 23.9,
+          "p95Ms": 23.9,
+          "maxMs": 23.9
+        },
+        "dynamic": {
+          "samples": 3,
+          "latestMs": 0.9,
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 3.7
+        },
+        "frame": {
+          "samples": 3,
+          "latestMs": 0.9,
+          "medianMs": 1.1,
+          "p95Ms": 1.1,
+          "maxMs": 43.8
+        }
+      }
+    },
+    {
+      "file": "1920x1080-selected-soviet.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "selected Soviet formation",
+      "metrics": {
+        "terrain": {
+          "samples": 2,
+          "latestMs": 2,
+          "medianMs": 2,
+          "p95Ms": 2,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 4,
+          "latestMs": 4.3,
+          "medianMs": 4.6,
+          "p95Ms": 7.5,
+          "maxMs": 23.3
+        },
+        "dynamic": {
+          "samples": 5,
+          "latestMs": 1.2,
+          "medianMs": 1,
+          "p95Ms": 1.2,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 5,
+          "latestMs": 1.2,
+          "medianMs": 7.9,
+          "p95Ms": 9,
+          "maxMs": 43.1
+        }
+      }
+    },
+    {
+      "file": "1920x1080-prepared-attack.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "prepared attack planning",
+      "metrics": {
+        "terrain": {
+          "samples": 2,
+          "latestMs": 2,
+          "medianMs": 2,
+          "p95Ms": 2,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 4,
+          "latestMs": 4.3,
+          "medianMs": 4.6,
+          "p95Ms": 7.5,
+          "maxMs": 23.3
+        },
+        "dynamic": {
+          "samples": 5,
+          "latestMs": 1.2,
+          "medianMs": 1,
+          "p95Ms": 1.2,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 5,
+          "latestMs": 1.2,
+          "medianMs": 7.9,
+          "p95Ms": 9,
+          "maxMs": 43.1
+        }
+      }
+    },
+    {
+      "file": "1920x1080-engineer-order.png",
+      "viewport": {
+        "width": 1920,
+        "height": 1080
+      },
+      "state": "bridge demolition engineering order",
+      "metrics": {
+        "terrain": {
+          "samples": 2,
+          "latestMs": 2,
+          "medianMs": 2,
+          "p95Ms": 2,
+          "maxMs": 8
+        },
+        "context": {
+          "samples": 4,
+          "latestMs": 4.3,
+          "medianMs": 4.6,
+          "p95Ms": 7.5,
+          "maxMs": 23.3
+        },
+        "dynamic": {
+          "samples": 5,
+          "latestMs": 1.2,
+          "medianMs": 1,
+          "p95Ms": 1.2,
+          "maxMs": 3.8
+        },
+        "frame": {
+          "samples": 5,
+          "latestMs": 1.2,
+          "medianMs": 7.9,
+          "p95Ms": 9,
+          "maxMs": 43.1
+        }
+      }
+    }
+  ]
+}

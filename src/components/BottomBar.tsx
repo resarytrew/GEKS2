@@ -5,6 +5,7 @@ import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
 import { IMPULSE_LABELS } from "@/engine/wego";
 import { PHASE_HINT, SIDE_SHORT } from "@/lib/labels";
 import type { CardDefinition, CardEffect, Side } from "@/engine/types";
+import { Icon } from "@/components/Icon";
 
 export default function BottomBar() {
   const state = useGame((s) => s.state);
@@ -170,9 +171,13 @@ export default function BottomBar() {
                 </button>
               );
             })}
-            <button className="flex w-[150px] shrink-0 flex-col items-center justify-center border border-dashed border-staff-edge2/60 text-staff-mute transition hover:border-staff-gold hover:text-staff-gold">
-              <span className="text-4xl leading-none">＋</span>
-              <span className="mt-2 text-[10px] uppercase tracking-[0.18em]">Добавить карту</span>
+            <button
+              onClick={() => useGame.getState().setPanel("help")}
+              className="flex w-[150px] shrink-0 flex-col items-center justify-center border border-dashed border-staff-edge2/60 text-staff-mute transition hover:border-staff-gold hover:text-staff-gold"
+              title="Карты поступают в руку через события и фазы сценария"
+            >
+              <Icon name="cards" className="h-8 w-8" />
+              <span className="mt-2 text-[10px] uppercase tracking-[0.18em]">О колоде</span>
             </button>
           </div>
         </div>
@@ -190,13 +195,31 @@ export default function BottomBar() {
 }
 
 function TinyFooter() {
+  const undo = useGame((state) => state.undo);
+  const redo = useGame((state) => state.redo);
+  const canUndo = useGame((state) => state.historyPast.length > 0);
+  const canRedo = useGame((state) => state.historyFuture.length > 0);
   return (
     <div className="flex h-7 items-center gap-5 border-t border-staff-edge/60 bg-staff-void/65 px-4 text-[10px] uppercase tracking-[0.12em] text-staff-mute">
       <span>v.1.0.0.1941</span>
-      <button className="hover:text-staff-gold">↶ Отменить</button>
-      <button className="hover:text-staff-gold">↷ Повторить ход</button>
+      <button
+        onClick={undo}
+        disabled={!canUndo}
+        className="inline-flex items-center gap-1.5 hover:text-staff-gold disabled:cursor-not-allowed disabled:opacity-35"
+      >
+        <Icon name="undo" className="h-3.5 w-3.5" />
+        Отменить
+      </button>
+      <button
+        onClick={redo}
+        disabled={!canRedo}
+        className="inline-flex items-center gap-1.5 hover:text-staff-gold disabled:cursor-not-allowed disabled:opacity-35"
+      >
+        <Icon name="redo" className="h-3.5 w-3.5" />
+        Повторить
+      </button>
       <div className="ml-auto flex items-center gap-5">
-        <button className="hover:text-staff-gold">▱ Фильтры</button>
+        <span className="hidden text-staff-mute/60 lg:inline">M карта · O приказы · L журнал · S сохранить</span>
         <button onClick={() => useGame.getState().setPanel("log")} className="hover:text-staff-gold">Лог хода⌃</button>
       </div>
     </div>

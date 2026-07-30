@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:v041": "vitest run v041-",
+    "capture:map-v11": "node scripts/capture-operational-map-v11.mjs",
     "smoke:production": "node scripts/smoke-production.mjs"
   },
   "dependencies": {
@@ -32,6 +33,7 @@
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.12",
+    "playwright": "^1.58.2",
     "postcss": "8.5.25",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3"

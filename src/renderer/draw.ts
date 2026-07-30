@@ -10,6 +10,31 @@
 
 import type { GameState, HexState, UnitState, Side } from "@/engine/types";
 import { axialToPixel, edgeMidpoint, hexCorners, HEX_SIZE, neighbors, pixelToAxial, sharedEdge, type Axial } from "@/engine/hex";
+import {
+  COASTLINES,
+  GEOGRAPHIC_LABELS,
+  LAKE_POLYGONS,
+  RIVER_LINES,
+  type GeoPath,
+} from "@/scenarios/baltic-1941/geography";
+import { lonLatToWorldPixel } from "@/scenarios/baltic-1941/world";
+import {
+  DEFAULT_MAP_PREFERENCES,
+  MAP_VISUAL_LOD,
+  getCounterPresentation,
+  getMapLod,
+  getSettlementPresentation,
+  shouldShowCoordinate,
+  type MapLayerPreferences,
+  type MapLod,
+} from "@/renderer/mapVisualConfig";
+import {
+  collectFrontlineEdges,
+  collectUniqueRiverEdges,
+  layoutMapLabels,
+  projectStack,
+  type LabelBox,
+} from "@/renderer/mapVisualModel";
 
 export interface Viewport {
   scale: number;
@@ -34,22 +59,29 @@ export interface RenderUI {
   activeSide: Side;
 }
 
+export type StaticMapOptions = Partial<MapLayerPreferences>;
+
+interface MapProjection {
+  ids: string[];
+  lod: MapLod;
+}
+
 const C = {
-  paper: "#b7a982",
-  clear: "#73755a",
-  forest: "#4f6447",
-  dforest: "#344832",
-  swamp: "#696543",
-  city: "#806c4c",
-  mcity: "#6b5438",
-  fort: "#8c744f",
-  coast: "#65725d",
-  lake: "#426776",
-  sea: "#243d46",
-  river: "#78a6ba",
-  road: "#a7824b",
-  mroad: "#d0a457",
-  rail: "#1e1a16",
+  paper: "#aaa17d",
+  clear: "#74745a",
+  forest: "#4d5c40",
+  dforest: "#33452f",
+  swamp: "#666144",
+  city: "#806b4d",
+  mcity: "#665038",
+  fort: "#806949",
+  coast: "#666d58",
+  lake: "#577a86",
+  sea: "#31515b",
+  river: "#79a6b7",
+  road: "#a98750",
+  mroad: "#d0a45d",
+  rail: "#29231d",
   ger: "#3f515b",
   gerDark: "#172227",
   gerText: "#f0f2ec",
@@ -63,7 +95,21 @@ const C = {
   gridStrong: "rgba(235,216,166,0.15)",
 };
 
-const terrainFill = (t: HexState["terrain"]): string => {
+const terrainFill = (t: HexState["terrain"], mode: "scheme" | "relief"): string => {
+  if (mode === "relief") {
+    switch (t) {
+      case "sea": return "#3b5960";
+      case "lake": return "#64818a";
+      case "forest": return "#536244";
+      case "dense_forest": return "#374936";
+      case "swamp": return "#746e50";
+      case "city": return "#8a7556";
+      case "major_city": return "#705a40";
+      case "fortified": return "#8c7451";
+      case "coast": return "#7f826b";
+      default: return "#858267";
+    }
+  }
   switch (t) {
     case "sea": return C.sea;
     case "lake": return C.lake;
@@ -92,16 +138,37 @@ function isVisible(sx: number, sy: number, view: View, pad: number): boolean {
   return sx > -pad && sx < view.width + pad && sy > -pad && sy < view.height + pad;
 }
 
-function visibleHexIds(state: GameState, vp: Viewport, view: View): string[] {
-  const pad = HEX_SIZE * vp.scale + 4;
+export function visibleHexIds(state: GameState, vp: Viewport, view: View): string[] {
+  const pad = HEX_SIZE * 2.25;
+  const corners = [
+    screenToHex(-pad, -pad, vp),
+    screenToHex(view.width + pad, -pad, vp),
+    screenToHex(-pad, view.height + pad, vp),
+    screenToHex(view.width + pad, view.height + pad, vp),
+  ];
+  const minQ = Math.min(...corners.map((corner) => corner.q)) - 3;
+  const maxQ = Math.max(...corners.map((corner) => corner.q)) + 3;
+  const minR = Math.min(...corners.map((corner) => corner.r)) - 3;
+  const maxR = Math.max(...corners.map((corner) => corner.r)) + 3;
   const out: string[] = [];
-  for (const id in state.hexes) {
-    const h = state.hexes[id];
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    const s = worldToScreen(p.x, p.y, vp);
-    if (isVisible(s.x, s.y, view, pad)) out.push(id);
+  for (let q = minQ; q <= maxQ; q++) {
+    for (let r = minR; r <= maxR; r++) {
+      const id = `${q}_${r}`;
+      if (!state.hexes[id]) continue;
+      const point = axialToPixel(q, r, HEX_SIZE);
+      const screen = worldToScreen(point.x, point.y, vp);
+      if (isVisible(screen.x, screen.y, view, pad * vp.scale + 4)) out.push(id);
+    }
   }
   return out;
+}
+
+function projectFrame(state: GameState, vp: Viewport, view: View): MapProjection {
+  return { ids: visibleHexIds(state, vp, view), lod: getMapLod(vp.scale) };
+}
+
+function resolvePreferences(options: StaticMapOptions): MapLayerPreferences {
+  return { ...DEFAULT_MAP_PREFERENCES, ...options };
 }
 
 function hexPath(ctx: CanvasRenderingContext2D, corners: { x: number; y: number }[]): void {
@@ -116,252 +183,598 @@ function hash01(q: number, r: number, salt: number): number {
   return x - Math.floor(x);
 }
 
-/** Static geography: terrain, control wash, front line, rivers, roads, rails. */
-export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState, vp: Viewport, view: View): void {
-  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  const seaGradient = ctx.createLinearGradient(0, 0, view.width, view.height);
-  seaGradient.addColorStop(0, "#31515b");
-  seaGradient.addColorStop(0.52, C.sea);
-  seaGradient.addColorStop(1, "#1a2c33");
-  ctx.fillStyle = seaGradient;
-  ctx.fillRect(0, 0, view.width, view.height);
-  const detail = vp.scale;
-  const ids = visibleHexIds(state, vp, view);
+function traceGeographicPath(
+  ctx: CanvasRenderingContext2D,
+  path: GeoPath,
+  vp: Viewport,
+  close = false,
+): void {
+  if (path.length < 2) return;
+  ctx.beginPath();
+  path.forEach(([lon, lat], index) => {
+    const world = lonLatToWorldPixel(lon, lat);
+    const screen = worldToScreen(world.x, world.y, vp);
+    if (index === 0) ctx.moveTo(screen.x, screen.y);
+    else ctx.lineTo(screen.x, screen.y);
+  });
+  if (close) ctx.closePath();
+}
 
-  // Only the current side's plan is rendered. Opponent orders remain hidden
-  // until the engine exposes them through detected contacts.
-  const ownOrders = state.plans[state.activeSide]?.orders ?? [];
-  for (const order of ownOrders) {
+function drawArrowHead(
+  ctx: CanvasRenderingContext2D,
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  size: number,
+): void {
+  const angle = Math.atan2(to.y - from.y, to.x - from.x);
+  ctx.beginPath();
+  ctx.moveTo(to.x, to.y);
+  ctx.lineTo(to.x - Math.cos(angle - 0.55) * size, to.y - Math.sin(angle - 0.55) * size);
+  ctx.lineTo(to.x - Math.cos(angle + 0.55) * size, to.y - Math.sin(angle + 0.55) * size);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawOrderRoutes(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  detail: number,
+): void {
+  const orders = state.plans[state.activeSide]?.orders ?? [];
+  for (const order of orders) {
     if (!order.route || order.route.length < 2 || order.status === "cancelled") continue;
-    ctx.strokeStyle =
+    const typeStyle =
+      order.orderType === "withdraw"
+        ? { colour: "rgba(122,177,201,0.9)", dash: [4, 5], width: 3.2 }
+        : order.orderType === "advance"
+          ? { colour: "rgba(215,82,59,0.92)", dash: [], width: 4.4 }
+          : order.orderType === "march"
+            ? { colour: "rgba(190,205,194,0.86)", dash: [10, 4], width: 3.6 }
+            : { colour: "rgba(218,180,85,0.88)", dash: [2, 5], width: 3.1 };
+    const colour =
       order.status === "delayed"
-        ? "rgba(205,137,62,0.9)"
+        ? "rgba(217,149,66,0.94)"
         : order.status === "failed"
-          ? "rgba(173,58,48,0.9)"
-          : state.activeSide === "germany"
-            ? "rgba(58,91,132,0.9)"
-            : "rgba(167,51,51,0.9)";
-    ctx.lineWidth = Math.max(2, 2.5 * detail);
-    ctx.setLineDash(order.status === "draft" ? [8, 5] : []);
+          ? "rgba(196,68,52,0.94)"
+          : typeStyle.colour;
+    const points = order.route
+      .map((id) => state.hexes[id])
+      .filter(Boolean)
+      .map((hex) => {
+        const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+        return worldToScreen(point.x, point.y, vp);
+      });
+    if (points.length < 2) continue;
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = Math.max(2.3, typeStyle.width * detail);
+    ctx.setLineDash(
+      order.status === "draft"
+        ? [9, 6]
+        : typeStyle.dash.map((value) => value * Math.max(0.8, detail)),
+    );
     ctx.beginPath();
-    for (let index = 0; index < order.route.length; index++) {
-      const hex = state.hexes[order.route[index]];
-      if (!hex) continue;
-      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
-      const screen = worldToScreen(point.x, point.y, vp);
-      if (index === 0) ctx.moveTo(screen.x, screen.y);
-      else ctx.lineTo(screen.x, screen.y);
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let index = 1; index < points.length; index++) {
+      const previous = points[index - 1];
+      const point = points[index];
+      const cx = (previous.x + point.x) / 2;
+      const cy = (previous.y + point.y) / 2 - Math.min(12, 7 * detail);
+      ctx.quadraticCurveTo(cx, cy, point.x, point.y);
     }
     ctx.stroke();
     ctx.setLineDash([]);
+    drawArrowHead(ctx, points.at(-2)!, points.at(-1)!, Math.max(8, 11 * detail));
   }
+}
 
-  // 1. Terrain fill + control wash
-  for (const id of ids) {
-    const h = state.hexes[id];
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    const corners = hexCorners(0, 0, HEX_SIZE).map((c) => ({ x: (p.x + c.x + vp.ox) * vp.scale, y: (p.y + c.y + vp.oy) * vp.scale }));
+/** 1 — neutral paper/sea substrate. */
+export function drawBaseBackgroundLayer(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  preferences: MapLayerPreferences,
+): void {
+  const gradient = ctx.createLinearGradient(0, 0, view.width, view.height);
+  gradient.addColorStop(0, preferences.highContrast ? "#294650" : "#31515b");
+  gradient.addColorStop(0.52, preferences.highContrast ? "#203b45" : C.sea);
+  gradient.addColorStop(1, "#17282f");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, view.width, view.height);
+}
+
+/** 2 — terrain colours and close-zoom terrain-specific marks. */
+export function drawTerrainLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  const mode = preferences.relief ? "relief" : "scheme";
+  const showPattern = MAP_VISUAL_LOD[projection.lod].showTerrainPattern;
+  for (const id of projection.ids) {
+    const hex = state.hexes[id];
+    const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+    const corners = hexCorners(hex.q, hex.r, HEX_SIZE).map((corner) =>
+      worldToScreen(corner.x, corner.y, vp),
+    );
     hexPath(ctx, corners);
-    ctx.fillStyle = terrainFill(h.terrain);
+    ctx.fillStyle = terrainFill(hex.terrain, mode);
     ctx.fill();
-    // Territory wash
-    if (h.terrain !== "sea" && h.terrain !== "lake") {
-      if (h.control === "germany") {
-        ctx.fillStyle = "rgba(74,89,112,0.16)";
-        ctx.fill();
-      } else if (h.control === "ussr") {
-        ctx.fillStyle = "rgba(138,59,50,0.13)";
-        ctx.fill();
+    if (!showPattern || hex.terrain === "sea" || hex.terrain === "lake") continue;
+    ctx.save();
+    hexPath(ctx, corners);
+    ctx.clip();
+    ctx.lineWidth = Math.max(0.55, vp.scale * 0.65);
+    ctx.strokeStyle =
+      hex.terrain === "forest" || hex.terrain === "dense_forest"
+        ? "rgba(211,201,151,0.18)"
+        : "rgba(35,27,18,0.18)";
+    const density = hex.terrain === "dense_forest" ? 4 : 2;
+    for (let index = 0; index < density; index++) {
+      const wx = point.x + (hash01(hex.q, hex.r, index) - 0.5) * HEX_SIZE * 1.1;
+      const wy = point.y + (hash01(hex.q, hex.r, index + 9) - 0.5) * HEX_SIZE;
+      const screen = worldToScreen(wx, wy, vp);
+      const size = Math.max(2, vp.scale * 3.2);
+      ctx.beginPath();
+      if (hex.terrain === "forest" || hex.terrain === "dense_forest") {
+        ctx.moveTo(screen.x, screen.y - size);
+        ctx.lineTo(screen.x - size * 0.65, screen.y + size * 0.7);
+        ctx.lineTo(screen.x + size * 0.65, screen.y + size * 0.7);
+        ctx.closePath();
+      } else if (hex.terrain === "swamp") {
+        ctx.moveTo(screen.x - size, screen.y);
+        ctx.quadraticCurveTo(screen.x, screen.y - size, screen.x + size, screen.y);
+      } else if (hex.terrain === "city" || hex.terrain === "major_city") {
+        ctx.rect(screen.x - size, screen.y - size, size * 1.4, size * 1.1);
+      } else if (hex.terrain === "fortified") {
+        ctx.moveTo(screen.x - size, screen.y + size * 0.5);
+        ctx.lineTo(screen.x, screen.y - size * 0.5);
+        ctx.lineTo(screen.x + size, screen.y + size * 0.5);
+      } else {
+        continue;
       }
+      ctx.stroke();
     }
-    if (detail > 0.38 && h.terrain !== "sea" && h.terrain !== "lake") {
+    ctx.restore();
+  }
+}
+
+/** 3 — continuous physical water, lakes and coastline keyline. */
+export function drawWaterAndCoastLayer(
+  ctx: CanvasRenderingContext2D,
+  vp: Viewport,
+  preferences: MapLayerPreferences,
+): void {
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  for (const lake of LAKE_POLYGONS) {
+    for (const ring of lake.rings) {
+      traceGeographicPath(ctx, ring, vp, true);
+      ctx.fillStyle = preferences.relief ? "rgba(75,112,124,0.76)" : "rgba(47,91,106,0.86)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(142,184,190,0.58)";
+      ctx.lineWidth = Math.max(0.8, 1.1 * vp.scale);
+      ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = "rgba(18,25,23,0.72)";
+  ctx.lineWidth = Math.max(1.2, 1.9 * vp.scale);
+  for (const path of COASTLINES) {
+    traceGeographicPath(ctx, path, vp);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(205,192,143,0.42)";
+  ctx.lineWidth = Math.max(0.55, 0.75 * vp.scale);
+  for (const path of COASTLINES) {
+    traceGeographicPath(ctx, path, vp);
+    ctx.stroke();
+  }
+  if (getMapLod(vp.scale) !== "far") {
+    for (const label of GEOGRAPHIC_LABELS) {
+      const world = lonLatToWorldPixel(label.lon, label.lat);
+      const screen = worldToScreen(world.x, world.y, vp);
+      ctx.save();
+      ctx.translate(screen.x, screen.y);
+      ctx.rotate(label.angle);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `${label.kind === "water" ? "600" : "500"} ${Math.round(9 + vp.scale * 2)}px Bahnschrift, 'Arial Narrow', sans-serif`;
+      ctx.strokeStyle = "rgba(12,21,22,0.68)";
+      ctx.lineWidth = 2.5;
+      ctx.strokeText(label.text, 0, 0);
+      ctx.fillStyle =
+        label.kind === "water" ? "rgba(151,199,210,0.7)" : "rgba(137,188,201,0.75)";
+      ctx.fillText(label.text, 0, 0);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/** 4 — deliberately quiet territory wash. */
+export function drawControlLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  if (preferences.controlMode !== "frontline_and_fill") return;
+  for (const id of projection.ids) {
+    const hex = state.hexes[id];
+    if (hex.terrain === "sea" || hex.terrain === "lake" || hex.control === "neutral") continue;
+    const corners = hexCorners(hex.q, hex.r, HEX_SIZE).map((corner) =>
+      worldToScreen(corner.x, corner.y, vp),
+    );
+    hexPath(ctx, corners);
+    ctx.fillStyle =
+      hex.control === "germany"
+        ? preferences.highContrast
+          ? "rgba(67,94,123,0.16)"
+          : "rgba(66,84,106,0.085)"
+        : hex.control === "ussr"
+          ? preferences.highContrast
+            ? "rgba(155,58,45,0.14)"
+            : "rgba(145,61,49,0.075)"
+          : "rgba(191,126,61,0.07)";
+    ctx.fill();
+    if (hex.control === "contested") {
       ctx.save();
       hexPath(ctx, corners);
       ctx.clip();
-      ctx.globalAlpha = 0.11;
-      ctx.strokeStyle = h.terrain === "forest" || h.terrain === "dense_forest" ? "#d1c28f" : "#21180e";
-      ctx.lineWidth = Math.max(0.4, 0.75 * detail);
-      for (let n = 0; n < 3; n++) {
-        const nx = p.x + (hash01(h.q, h.r, n) - 0.5) * HEX_SIZE * 1.2;
-        const ny = p.y + (hash01(h.q, h.r, n + 9) - 0.5) * HEX_SIZE * 1.05;
-        const a = hash01(h.q, h.r, n + 17) * Math.PI;
-        const len = HEX_SIZE * (0.18 + hash01(h.q, h.r, n + 27) * 0.28) * detail;
-        const s0 = worldToScreen(nx, ny, vp);
+      ctx.strokeStyle = preferences.highContrast
+        ? "rgba(232,155,76,0.52)"
+        : "rgba(184,119,56,0.3)";
+      ctx.lineWidth = 1;
+      const left = Math.min(...corners.map((corner) => corner.x));
+      const right = Math.max(...corners.map((corner) => corner.x));
+      const top = Math.min(...corners.map((corner) => corner.y));
+      const bottom = Math.max(...corners.map((corner) => corner.y));
+      for (let x = left - (bottom - top); x < right; x += 7) {
         ctx.beginPath();
-        ctx.moveTo(s0.x - Math.cos(a) * len, s0.y - Math.sin(a) * len);
-        ctx.lineTo(s0.x + Math.cos(a) * len, s0.y + Math.sin(a) * len);
+        ctx.moveTo(x, bottom);
+        ctx.lineTo(x + (bottom - top), top);
         ctx.stroke();
       }
       ctx.restore();
-      ctx.globalAlpha = 1;
-    }
-  }
-
-  // 2. Hex grid
-  ctx.lineWidth = detail > 0.7 ? 1 : 0.5;
-  ctx.strokeStyle = detail > 0.9 ? C.gridStrong : C.grid;
-  if (detail > 0.42) {
-    for (const id of ids) {
-      const h = state.hexes[id];
-      if (h.terrain === "sea") continue;
-      const p = axialToPixel(h.q, h.r, HEX_SIZE);
-      const corners = hexCorners(0, 0, HEX_SIZE).map((c) => ({ x: (p.x + c.x + vp.ox) * vp.scale, y: (p.y + c.y + vp.oy) * vp.scale }));
-      hexPath(ctx, corners);
-      ctx.stroke();
-    }
-  }
-  if (detail > 0.78) {
-    ctx.font = `${Math.round(6 + 2 * detail)}px ui-monospace, monospace`;
-    ctx.fillStyle = "rgba(238,224,184,0.20)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    for (const id of ids) {
-      const h = state.hexes[id];
-      if (h.terrain === "sea") continue;
-      const p = axialToPixel(h.q, h.r, HEX_SIZE);
-      const s = worldToScreen(p.x, p.y - HEX_SIZE * 0.58, vp);
-      ctx.fillText(`${h.q},${h.r}`, s.x, s.y);
-    }
-  }
-
-  // 3. Front line: edges where adjacent control differs.
-  ctx.lineWidth = Math.max(2, 2.8 * detail);
-  ctx.strokeStyle = "rgba(198,68,46,0.72)";
-  ctx.setLineDash([5 * Math.max(0.8, detail), 5 * Math.max(0.8, detail)]);
-  for (const id of ids) {
-    const h = state.hexes[id];
-    if (h.terrain === "sea" || h.terrain === "lake") continue;
-    if (h.control === "neutral") continue;
-    const a: Axial = { q: h.q, r: h.r };
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    for (let dir = 0; dir < 6; dir++) {
-      const n = neighbors(a)[dir];
-      const nh = state.hexes[`${n.q}_${n.r}`];
-      if (!nh || nh.terrain === "sea" || nh.terrain === "lake") continue;
-      if (nh.control !== h.control && nh.control !== "neutral") {
-        const edge = sharedEdge(a, n);
-        if (edge == null) continue;
-        const ma = edgeMidpoint(h.q, h.r, (edge + 1) % 6, HEX_SIZE);
-        const mb = edgeMidpoint(h.q, h.r, (edge + 5) % 6, HEX_SIZE);
-        const from = worldToScreen((p.x + ma.x) / 2, (p.y + ma.y) / 2, vp);
-        const to = worldToScreen((p.x + mb.x) / 2, (p.y + mb.y) / 2, vp);
-        ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
-      }
-    }
-  }
-  ctx.setLineDash([]);
-
-  // 4. Rivers (drawn along edges)
-  ctx.lineCap = "round";
-  ctx.lineWidth = Math.max(1.4, 2.4 * detail);
-  ctx.strokeStyle = C.river;
-  for (const id of ids) {
-    const h = state.hexes[id];
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    for (const e of h.riverEdges) {
-      const m = edgeMidpoint(h.q, h.r, e, HEX_SIZE);
-      // short segment across the edge (center -> midpoint) so adjacent hexes connect
-      const from = worldToScreen(p.x + (m.x - p.x) * 0.45, p.y + (m.y - p.y) * 0.45, vp);
-      const to = worldToScreen(m.x, m.y, vp);
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.stroke();
-    }
-  }
-
-  // 5. Roads & railways
-  if (detail > 0.4) {
-    // minor roads
-    ctx.strokeStyle = C.road;
-    ctx.lineWidth = Math.max(1, 1.6 * detail);
-    for (const id of ids) {
-      drawEdgeLines(ctx, state.hexes[id], vp, "road");
-    }
-    // major roads
-    ctx.strokeStyle = C.mroad;
-    ctx.lineWidth = Math.max(1.6, 2.6 * detail);
-    for (const id of ids) drawEdgeLines(ctx, state.hexes[id], vp, "major");
-  }
-  if (detail > 0.55) {
-    ctx.strokeStyle = C.rail;
-    ctx.lineWidth = Math.max(1, 1.4 * detail);
-    ctx.setLineDash([4 * detail, 3 * detail]);
-    for (const id of ids) drawEdgeLines(ctx, state.hexes[id], vp, "rail");
-    ctx.setLineDash([]);
-  }
-
-  // 6. Bridges
-  if (detail > 0.6) {
-    for (const id of ids) {
-      const h = state.hexes[id];
-      const p = axialToPixel(h.q, h.r, HEX_SIZE);
-      for (const b of h.bridgeEdges) {
-        const m = edgeMidpoint(h.q, h.r, b.edge, HEX_SIZE);
-        const s = worldToScreen(m.x, m.y, vp);
-        ctx.lineWidth = Math.max(1.5, 2.4 * detail);
-        if (b.state === "destroyed") {
-          ctx.strokeStyle = "#b23b2e";
-          ctx.beginPath();
-          ctx.moveTo(s.x - 4, s.y - 4);
-          ctx.lineTo(s.x + 4, s.y + 4);
-          ctx.moveTo(s.x + 4, s.y - 4);
-          ctx.lineTo(s.x - 4, s.y + 4);
-          ctx.stroke();
-        } else {
-          ctx.strokeStyle = b.state === "pontoon" ? "#7a6a9c" : "#3a2f1c";
-          ctx.beginPath();
-          ctx.moveTo(s.x - 4, s.y);
-          ctx.lineTo(s.x + 4, s.y);
-          ctx.stroke();
-        }
-        void p;
-      }
-    }
-  }
-
-  // 7. Settlements
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  for (const id of ids) {
-    const h = state.hexes[id];
-    if (!h.settlement) continue;
-    const imp = h.settlement.importance;
-    if (detail < 0.6 && !(imp === "strategic" || imp === "major")) continue;
-    if (detail < 0.4 && imp !== "strategic") continue;
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    const s = worldToScreen(p.x, p.y + HEX_SIZE * 0.62, vp);
-    const dotR = imp === "strategic" ? 4 : imp === "major" ? 3.2 : 2.4;
-    const cityCenter = worldToScreen(p.x, p.y, vp);
-    ctx.fillStyle = imp === "strategic" || imp === "major" ? "#1a1711" : "#302718";
-    ctx.strokeStyle = "rgba(235,218,170,0.6)";
-    ctx.lineWidth = Math.max(0.8, 1.1 * detail);
-    ctx.beginPath();
-    ctx.arc(cityCenter.x, cityCenter.y, dotR * Math.max(0.8, detail), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    if (detail > 0.62) {
-      const label = imp === "strategic" || imp === "major" ? h.settlement.name.toUpperCase() : h.settlement.name;
-      ctx.font = `${imp === "strategic" ? "700 " : "600 "}${Math.round(10 + 3 * detail)}px 'Iowan Old Style', Georgia, serif`;
-      ctx.lineWidth = Math.max(2, 2.4 * detail);
-      ctx.strokeStyle = "rgba(0,0,0,0.72)";
-      ctx.strokeText(label, s.x, s.y);
-      ctx.fillStyle = imp === "strategic" || imp === "major" ? "#f4eedb" : "#d9cfb1";
-      ctx.fillText(label, s.x, s.y);
     }
   }
 }
 
-function drawEdgeLines(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport, kind: "road" | "major" | "rail"): void {
+/** 5 — restrained grid and optional coordinates. */
+export function drawHexGridLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  if (!preferences.showGrid) return;
+  const config = MAP_VISUAL_LOD[projection.lod];
+  ctx.strokeStyle = `rgba(235,216,166,${preferences.highContrast ? config.gridOpacity * 1.8 : config.gridOpacity})`;
+  ctx.lineWidth = config.gridLineWidth;
+  for (const id of projection.ids) {
+    const hex = state.hexes[id];
+    if (hex.terrain === "sea") continue;
+    const corners = hexCorners(hex.q, hex.r, HEX_SIZE).map((corner) =>
+      worldToScreen(corner.x, corner.y, vp),
+    );
+    hexPath(ctx, corners);
+    ctx.stroke();
+    const obstructed = Boolean(hex.settlement || hex.stackUnitIds.length);
+    if (!shouldShowCoordinate(projection.lod, preferences.coordinateMode, hex.q, hex.r, obstructed)) continue;
+    const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+    const screen = worldToScreen(point.x, point.y - HEX_SIZE * 0.63, vp);
+    ctx.font = `${Math.round(6 + vp.scale * 1.5)}px ui-monospace, monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = `rgba(238,224,184,${preferences.highContrast ? 0.34 : config.coordinateOpacity})`;
+    ctx.fillText(`${hex.q},${hex.r}`, screen.x, screen.y);
+  }
+}
+
+function traceSharedEdge(
+  ctx: CanvasRenderingContext2D,
+  hex: HexState,
+  edge: number,
+  vp: Viewport,
+): void {
+  const center = axialToPixel(hex.q, hex.r, HEX_SIZE);
+  const midpoint = edgeMidpoint(hex.q, hex.r, edge, HEX_SIZE);
+  const angle = Math.atan2(midpoint.y - center.y, midpoint.x - center.x) + Math.PI / 2;
+  const half = HEX_SIZE * 0.5;
+  const from = worldToScreen(midpoint.x + Math.cos(angle) * half, midpoint.y + Math.sin(angle) * half, vp);
+  const to = worldToScreen(midpoint.x - Math.cos(angle) * half, midpoint.y - Math.sin(angle) * half, vp);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+}
+
+/** 6 — major/minor rivers and bridge state symbols. */
+export function drawRiverLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  if (!preferences.showRivers) return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  for (const river of RIVER_LINES) {
+    const primary = ["Daugava", "Neman", "Neris", "Velikaya", "Narva"].includes(river.name);
+    if (!primary && projection.lod === "far") continue;
+    for (const path of river.paths) {
+      traceGeographicPath(ctx, path, vp);
+      if (primary) {
+        ctx.strokeStyle = "rgba(28,55,63,0.48)";
+        ctx.lineWidth = Math.max(2.4, vp.scale * 4.1);
+        ctx.stroke();
+        traceGeographicPath(ctx, path, vp);
+      }
+      ctx.strokeStyle = primary ? "rgba(112,184,207,0.88)" : "rgba(92,153,174,0.68)";
+      ctx.lineWidth = Math.max(primary ? 1.25 : 0.7, vp.scale * (primary ? 2.25 : 1.15));
+      ctx.stroke();
+    }
+  }
+  ctx.strokeStyle = "rgba(112,177,198,0.78)";
+  ctx.lineWidth = Math.max(1, vp.scale * 1.6);
+  for (const edge of collectUniqueRiverEdges(state, projection.ids)) {
+    traceSharedEdge(ctx, state.hexes[edge.fromHexId], edge.edge, vp);
+    ctx.stroke();
+  }
+  if (MAP_VISUAL_LOD[projection.lod].showBridgeDetails) {
+    for (const id of projection.ids) {
+      const hex = state.hexes[id];
+      for (const bridge of hex.bridgeEdges) {
+        const midpoint = edgeMidpoint(hex.q, hex.r, bridge.edge, HEX_SIZE);
+        const screen = worldToScreen(midpoint.x, midpoint.y, vp);
+        const size = Math.max(4, vp.scale * 5);
+        ctx.lineWidth = Math.max(1.4, vp.scale * 1.7);
+        ctx.strokeStyle =
+          bridge.state === "destroyed" ? "#d35b43" : bridge.state === "pontoon" ? "#c6a86f" : "#241d15";
+        if (bridge.state === "destroyed") {
+          ctx.beginPath();
+          ctx.moveTo(screen.x - size, screen.y - size);
+          ctx.lineTo(screen.x + size, screen.y + size);
+          ctx.moveTo(screen.x + size, screen.y - size);
+          ctx.lineTo(screen.x - size, screen.y + size);
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(screen.x - size, screen.y - 2);
+          ctx.lineTo(screen.x + size, screen.y - 2);
+          ctx.moveTo(screen.x - size, screen.y + 2);
+          ctx.lineTo(screen.x + size, screen.y + 2);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/** 7 — major/minor roads and railway hierarchy. */
+export function drawTransportLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  ctx.save();
+  ctx.lineCap = "round";
+  if (preferences.showRoads) {
+    if (MAP_VISUAL_LOD[projection.lod].showMinorRoads) {
+      ctx.strokeStyle = "rgba(157,124,75,0.66)";
+      ctx.lineWidth = Math.max(0.7, vp.scale * 1.05);
+      ctx.setLineDash([3, 2]);
+      for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "road");
+      ctx.setLineDash([]);
+    }
+    ctx.strokeStyle = "rgba(211,166,88,0.78)";
+    ctx.lineWidth = Math.max(1.2, vp.scale * 2.05);
+    for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "major");
+  }
+  if (preferences.showRailways) {
+    ctx.strokeStyle = "rgba(28,23,18,0.88)";
+    ctx.lineWidth = Math.max(1.1, vp.scale * 1.6);
+    for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "rail");
+    ctx.strokeStyle = "rgba(210,194,146,0.54)";
+    ctx.lineWidth = Math.max(0.55, vp.scale * 0.65);
+    ctx.setLineDash([3.5, 3.5]);
+    for (const id of projection.ids) drawEdgeLines(ctx, state, state.hexes[id], vp, "rail");
+    ctx.setLineDash([]);
+  }
+  ctx.restore();
+}
+
+/** 8 — importance-aware labels with collision avoidance. */
+export function drawSettlementLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  if (!preferences.showSettlements) return;
+  const fixed: LabelBox[] = [];
+  const meta = new Map<string, { hex: HexState; text: string; fontSize: number; fontWeight: number; marker: string; halo: number }>();
+  const candidates = projection.ids.flatMap((id) => {
+    const hex = state.hexes[id];
+    if (!hex.settlement) return [];
+    const presentation = getSettlementPresentation(hex.settlement.importance, projection.lod);
+    if (!presentation.visible) return [];
+    const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+    const screen = worldToScreen(point.x, point.y, vp);
+    const text =
+      hex.settlement.importance === "strategic" || hex.settlement.importance === "major"
+        ? hex.settlement.name.toUpperCase()
+        : hex.settlement.name;
+    ctx.font = `${presentation.fontWeight} ${presentation.fontSize}px 'Iowan Old Style', Georgia, serif`;
+    const width = ctx.measureText(text).width;
+    meta.set(id, {
+      hex,
+      text,
+      fontSize: presentation.fontSize,
+      fontWeight: presentation.fontWeight,
+      marker: presentation.marker,
+      halo: presentation.haloStrength,
+    });
+    if (hex.stackUnitIds.length) {
+      const counter = getCounterPresentation(vp.scale, projection.lod);
+      fixed.push({
+        left: screen.x - counter.size * 0.55,
+        top: screen.y - counter.size * 0.5,
+        right: screen.x + counter.size * 0.55,
+        bottom: screen.y + counter.size * 0.5,
+      });
+    }
+    return [{
+      id,
+      x: screen.x,
+      y: screen.y,
+      width,
+      height: presentation.fontSize + 3,
+      priority: presentation.priority,
+      strategic: hex.settlement.importance === "strategic",
+    }];
+  });
+  const placed = layoutMapLabels(candidates, fixed);
+  for (const label of placed) {
+    const item = meta.get(label.id);
+    if (!item) continue;
+    const point = axialToPixel(item.hex.q, item.hex.r, HEX_SIZE);
+    const center = worldToScreen(point.x, point.y, vp);
+    const radius = item.marker === "strategic" ? 4.5 : item.marker === "node" ? 3.8 : item.marker === "ring" ? 3 : 2;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+    ctx.fillStyle = "#1b1710";
+    ctx.fill();
+    ctx.strokeStyle = "rgba(235,218,170,0.7)";
+    ctx.lineWidth = item.marker === "strategic" ? 1.6 : 1;
+    ctx.stroke();
+    ctx.font = `${item.fontWeight} ${item.fontSize}px 'Iowan Old Style', Georgia, serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const x = (label.box.left + label.box.right) / 2;
+    const y = (label.box.top + label.box.bottom) / 2;
+    ctx.strokeStyle = "rgba(8,10,8,0.84)";
+    ctx.lineWidth = item.halo;
+    ctx.strokeText(item.text, x, y);
+    ctx.fillStyle = item.fontWeight >= 600 ? "#f1ead4" : "#d4c9aa";
+    ctx.fillText(item.text, x, y);
+  }
+}
+
+/** 9 — one canonical shared edge per control boundary. */
+export function drawFrontlineLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  preferences: MapLayerPreferences,
+): void {
+  if (preferences.controlMode === "off") return;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.strokeStyle = preferences.highContrast ? "rgba(239,84,55,0.96)" : "rgba(211,77,52,0.76)";
+  ctx.lineWidth = Math.max(1.8, vp.scale * 2.7);
+  ctx.setLineDash([Math.max(4, vp.scale * 6), Math.max(3, vp.scale * 4)]);
+  for (const edge of collectFrontlineEdges(state, projection.ids)) {
+    traceSharedEdge(ctx, state.hexes[edge.fromHexId], edge.edge, vp);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Compatibility orchestrator for layers 1–9. */
+export function drawStaticLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  view: View,
+  options: StaticMapOptions = {},
+): void {
+  const preferences = resolvePreferences(options);
+  const projection = projectFrame(state, vp, view);
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  drawBaseBackgroundLayer(ctx, view, preferences);
+  drawTerrainLayer(ctx, state, vp, projection, preferences);
+  drawWaterAndCoastLayer(ctx, vp, preferences);
+  drawControlLayer(ctx, state, vp, projection, preferences);
+  drawHexGridLayer(ctx, state, vp, projection, preferences);
+  drawRiverLayer(ctx, state, vp, projection, preferences);
+  drawTransportLayer(ctx, state, vp, projection, preferences);
+  drawSettlementLayer(ctx, state, vp, projection, preferences);
+  drawFrontlineLayer(ctx, state, vp, projection, preferences);
+}
+
+/** Cache A: immutable physical geography (layers 1–3). */
+export function drawTerrainCache(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  view: View,
+  options: StaticMapOptions = {},
+): void {
+  const preferences = resolvePreferences(options);
+  const projection = projectFrame(state, vp, view);
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  drawBaseBackgroundLayer(ctx, view, preferences);
+  drawTerrainLayer(ctx, state, vp, projection, preferences);
+  drawWaterAndCoastLayer(ctx, vp, preferences);
+}
+
+/** Cache B: operational context without orders or interaction (layers 4–9). */
+export function drawContextCache(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  view: View,
+  options: StaticMapOptions = {},
+): void {
+  const preferences = resolvePreferences(options);
+  const projection = projectFrame(state, vp, view);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  drawControlLayer(ctx, state, vp, projection, preferences);
+  drawHexGridLayer(ctx, state, vp, projection, preferences);
+  drawRiverLayer(ctx, state, vp, projection, preferences);
+  drawTransportLayer(ctx, state, vp, projection, preferences);
+  drawSettlementLayer(ctx, state, vp, projection, preferences);
+  drawFrontlineLayer(ctx, state, vp, projection, preferences);
+}
+
+function drawEdgeLines(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  h: HexState,
+  vp: Viewport,
+  kind: "road" | "major" | "rail",
+): void {
   const edges = kind === "road" ? h.roadEdges : kind === "major" ? h.majorRoadEdges : h.railwayEdges;
   const p = axialToPixel(h.q, h.r, HEX_SIZE);
   for (const e of edges) {
     const m = edgeMidpoint(h.q, h.r, e, HEX_SIZE);
-    const from = worldToScreen(p.x + (m.x - p.x) * 0.5, p.y + (m.y - p.y) * 0.5, vp);
-    const to = worldToScreen(m.x, m.y, vp);
+    const adjacentAxial = pixelToAxial(m.x * 2 - p.x, m.y * 2 - p.y, HEX_SIZE);
+    const adjacent = state.hexes[`${adjacentAxial.q}_${adjacentAxial.r}`];
+    if (!adjacent || h.id.localeCompare(adjacent.id) >= 0) continue;
+    const reverseEdges =
+      kind === "road"
+        ? adjacent.roadEdges
+        : kind === "major"
+          ? adjacent.majorRoadEdges
+          : adjacent.railwayEdges;
+    if (!reverseEdges.includes((e + 3) % 6)) continue;
+    const from = worldToScreen(p.x, p.y, vp);
+    const adjacentCenter = axialToPixel(adjacent.q, adjacent.r, HEX_SIZE);
+    const to = worldToScreen(adjacentCenter.x, adjacentCenter.y, vp);
     ctx.beginPath();
     ctx.moveTo(from.x, from.y);
     ctx.lineTo(to.x, to.y);
@@ -369,67 +782,255 @@ function drawEdgeLines(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport,
   }
 }
 
-/** Dynamic layer: selection, hover, reachable, route, units. */
-export function drawDynamicLayer(ctx: CanvasRenderingContext2D, state: GameState, vp: Viewport, view: View, ui: RenderUI): void {
-  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-  ctx.clearRect(0, 0, view.width, view.height);
-  const detail = vp.scale;
-  const ids = visibleHexIds(state, vp, view);
-
-  // Reachable hexes
-  if (ui.reachable) {
-    ctx.fillStyle = "rgba(96,150,90,0.30)";
-    ctx.strokeStyle = "rgba(60,110,55,0.6)";
-    ctx.lineWidth = 1;
-    for (const [id] of ui.reachable) {
-      highlightHex(ctx, state.hexes[id], vp, ctx.fillStyle, null);
+/** 10 — orders, supply network, ZOC and a temporary route preview. */
+export function drawOperationalOverlayLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  ui: RenderUI,
+  preferences: MapLayerPreferences,
+): void {
+  if (preferences.showOrders) drawOrderRoutes(ctx, state, vp, vp.scale);
+  if (preferences.showSupply) {
+    ctx.save();
+    ctx.strokeStyle = "rgba(214,184,89,0.72)";
+    ctx.fillStyle = "rgba(214,184,89,0.86)";
+    ctx.lineWidth = Math.max(1.5, vp.scale * 2);
+    ctx.setLineDash([7, 4]);
+    for (const unit of Object.values(state.units)) {
+      if (unit.eliminated || unit.side !== ui.activeSide || unit.supplyState === "full") continue;
+      const hex = state.hexes[unit.hexId];
+      if (!hex) continue;
+      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+      const screen = worldToScreen(point.x, point.y, vp);
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, Math.max(9, 14 * vp.scale), 0, Math.PI * 2);
+      ctx.stroke();
     }
-    for (const [id] of ui.reachable) highlightHex(ctx, state.hexes[id], vp, null, "rgba(60,110,55,0.5)");
+    ctx.restore();
   }
-
-  // Attack target
-  if (ui.attackTargetHexId && state.hexes[ui.attackTargetHexId]) {
-    highlightHex(ctx, state.hexes[ui.attackTargetHexId], vp, "rgba(190,60,48,0.32)", "#b23b2e");
+  if (ui.showZOC) {
+    const zocHexIds = new Set<string>();
+    for (const unit of Object.values(state.units)) {
+      if (unit.side === ui.activeSide || unit.eliminated) continue;
+      const origin = state.hexes[unit.hexId];
+      if (!origin) continue;
+      for (const adjacent of neighbors(origin)) {
+        const id = `${adjacent.q}_${adjacent.r}`;
+        const hex = state.hexes[id];
+        if (hex && hex.terrain !== "sea" && hex.terrain !== "lake") zocHexIds.add(id);
+      }
+    }
+    for (const id of zocHexIds) {
+      const hex = state.hexes[id];
+      if (!hex) continue;
+      highlightHex(
+        ctx,
+        hex,
+        vp,
+        ui.activeSide === "germany" ? "rgba(151,48,38,0.09)" : "rgba(45,73,91,0.11)",
+        null,
+      );
+    }
   }
-
-  // Selected hex ring
-  if (ui.selectedHexId && state.hexes[ui.selectedHexId]) {
-    highlightHex(ctx, state.hexes[ui.selectedHexId], vp, null, C.gold);
-  }
-  // Hover ring
-  if (ui.hoveredHexId && ui.hoveredHexId !== ui.selectedHexId && state.hexes[ui.hoveredHexId]) {
-    highlightHex(ctx, state.hexes[ui.hoveredHexId], vp, "rgba(201,162,75,0.16)", "rgba(201,162,75,0.7)");
-  }
-
-  // Route path
   if (ui.routePath && ui.routePath.length > 1) {
     ctx.strokeStyle = C.gold;
-    ctx.lineWidth = Math.max(2, 2.5 * detail);
+    ctx.fillStyle = C.gold;
+    ctx.lineWidth = Math.max(2, 2.5 * vp.scale);
     ctx.setLineDash([6, 4]);
+    const points = ui.routePath.flatMap((id) => {
+      const hex = state.hexes[id];
+      if (!hex) return [];
+      const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+      return [worldToScreen(point.x, point.y, vp)];
+    });
     ctx.beginPath();
-    for (let i = 0; i < ui.routePath.length; i++) {
-      const h = state.hexes[ui.routePath[i]];
-      if (!h) continue;
-      const p = axialToPixel(h.q, h.r, HEX_SIZE);
-      const s = worldToScreen(p.x, p.y, vp);
-      if (i === 0) ctx.moveTo(s.x, s.y);
-      else ctx.lineTo(s.x, s.y);
-    }
+    points.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
     ctx.stroke();
     ctx.setLineDash([]);
-  }
-
-  // Units / counters
-  for (const id of ids) {
-    const h = state.hexes[id];
-    if (h.stackUnitIds.length === 0) continue;
-    const units = h.stackUnitIds.map((uid) => state.units[uid]).filter((u) => u && !u.eliminated) as UnitState[];
-    if (units.length === 0) continue;
-    drawStack(ctx, units, h, vp, detail, ui);
+    if (points.length > 1) drawArrowHead(ctx, points.at(-2)!, points.at(-1)!, Math.max(7, 9 * vp.scale));
   }
 }
 
-function highlightHex(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport, fill: string | null, stroke: string | null): void {
+/** 11 — counters only; max three visible counters per hex. */
+export function drawUnitLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  projection: MapProjection,
+  ui: RenderUI,
+): void {
+  for (const id of projection.ids) {
+    const hex = state.hexes[id];
+    if (hex.stackUnitIds.length === 0) continue;
+    const units = hex.stackUnitIds
+      .map((unitId) => state.units[unitId])
+      .filter((unit) => unit && !unit.eliminated) as UnitState[];
+    if (units.length) drawStack(ctx, units, hex, vp, projection.lod, ui);
+  }
+}
+
+function drawReachableMarker(
+  ctx: CanvasRenderingContext2D,
+  hex: HexState,
+  vp: Viewport,
+): void {
+  const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+  const center = worldToScreen(point.x, point.y, vp);
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, Math.max(2.2, 3.2 * vp.scale), 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(151,190,112,0.74)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(30,55,27,0.7)";
+  ctx.lineWidth = 0.8;
+  ctx.stroke();
+}
+
+/** 12 — interaction language: dot, fill+brass, outline, target hatch. */
+export function drawInteractionLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  ui: RenderUI,
+): void {
+  if (ui.reachable) {
+    for (const [id] of ui.reachable) {
+      const hex = state.hexes[id];
+      if (hex) drawReachableMarker(ctx, hex, vp);
+    }
+  }
+  if (ui.attackTargetHexId && state.hexes[ui.attackTargetHexId]) {
+    const target = state.hexes[ui.attackTargetHexId];
+    highlightHex(ctx, target, vp, "rgba(174,52,40,0.18)", "#d05942", 2.5);
+    const point = axialToPixel(target.q, target.r, HEX_SIZE);
+    const center = worldToScreen(point.x, point.y, vp);
+    const radius = Math.max(9, HEX_SIZE * vp.scale * 0.42);
+    ctx.save();
+    ctx.strokeStyle = "rgba(235,132,92,0.8)";
+    ctx.lineWidth = 1.2;
+    for (let offset = -radius; offset <= radius; offset += 6) {
+      ctx.beginPath();
+      ctx.moveTo(center.x + offset - 6, center.y + radius);
+      ctx.lineTo(center.x + offset + 6, center.y - radius);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  if (ui.selectedHexId && state.hexes[ui.selectedHexId]) {
+    ctx.save();
+    ctx.shadowColor = "rgba(224,189,101,0.38)";
+    ctx.shadowBlur = 7;
+    highlightHex(ctx, state.hexes[ui.selectedHexId], vp, "rgba(224,189,101,0.12)", C.gold, 2.8);
+    ctx.restore();
+  }
+  if (ui.hoveredHexId && ui.hoveredHexId !== ui.selectedHexId && state.hexes[ui.hoveredHexId]) {
+    highlightHex(ctx, state.hexes[ui.hoveredHexId], vp, null, "rgba(238,220,164,0.64)", 1.2);
+  }
+}
+
+/** 13 — contact and battle effects, intentionally last. */
+export function drawTransientEffectsLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  ui: RenderUI,
+): void {
+  for (const contact of state.contacts.filter((item) => item.detectedBy.includes(ui.activeSide))) {
+    const hex = state.hexes[contact.hexId];
+    if (!hex) continue;
+    drawOperationalBurst(
+      ctx,
+      hex,
+      vp,
+      contact.resolved ? "rgba(217,113,48,0.9)" : "rgba(255,151,55,0.98)",
+      Math.max(7, 10 * vp.scale),
+      contact.resolved,
+    );
+  }
+  if (!["execution", "combat", "after_action"].includes(state.phase)) return;
+  const resolutions =
+    state.phase === "after_action"
+      ? state.combatResolutions.slice(-10)
+      : state.lastCombat
+        ? [state.lastCombat]
+        : [];
+  for (const combat of resolutions) {
+    const hex = state.hexes[combat.defenderHexId];
+    if (hex) drawOperationalBurst(ctx, hex, vp, "rgba(226,70,40,0.96)", Math.max(9, 14 * vp.scale), true);
+  }
+}
+
+/** Dynamic orchestrator for layers 10–13. */
+export function drawDynamicLayer(
+  ctx: CanvasRenderingContext2D,
+  state: GameState,
+  vp: Viewport,
+  view: View,
+  ui: RenderUI,
+  options: StaticMapOptions = {},
+): void {
+  const preferences = resolvePreferences(options);
+  const projection = projectFrame(state, vp, view);
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+  drawOperationalOverlayLayer(ctx, state, vp, ui, preferences);
+  drawUnitLayer(ctx, state, vp, projection, ui);
+  drawInteractionLayer(ctx, state, vp, ui);
+  drawTransientEffectsLayer(ctx, state, vp, ui);
+}
+
+function drawOperationalBurst(
+  ctx: CanvasRenderingContext2D,
+  hex: HexState,
+  vp: Viewport,
+  colour: string,
+  radius: number,
+  ring: boolean,
+): void {
+  const point = axialToPixel(hex.q, hex.r, HEX_SIZE);
+  const center = worldToScreen(point.x, point.y, vp);
+  ctx.save();
+  ctx.translate(center.x, center.y);
+  ctx.fillStyle = colour;
+  ctx.shadowColor = colour;
+  ctx.shadowBlur = Math.max(5, radius * 0.65);
+  ctx.beginPath();
+  for (let index = 0; index < 16; index++) {
+    const angle = (Math.PI * 2 * index) / 16 - Math.PI / 2;
+    const length = index % 2 === 0 ? radius : radius * 0.35;
+    const x = Math.cos(angle) * length;
+    const y = Math.sin(angle) * length;
+    if (index === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "rgba(255,221,130,0.92)";
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 0.22, 0, Math.PI * 2);
+  ctx.fill();
+  if (ring) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.arc(0, 0, radius * 2.35, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function highlightHex(
+  ctx: CanvasRenderingContext2D,
+  h: HexState,
+  vp: Viewport,
+  fill: string | null,
+  stroke: string | null,
+  lineWidth = 2.4,
+): void {
   const p = axialToPixel(h.q, h.r, HEX_SIZE);
   const corners = hexCorners(0, 0, HEX_SIZE).map((c) => ({ x: (p.x + c.x + vp.ox) * vp.scale, y: (p.y + c.y + vp.oy) * vp.scale }));
   hexPath(ctx, corners);
@@ -439,30 +1040,45 @@ function highlightHex(ctx: CanvasRenderingContext2D, h: HexState, vp: Viewport, 
   }
   if (stroke) {
     ctx.strokeStyle = stroke;
-    ctx.lineWidth = 2.4;
+    ctx.lineWidth = lineWidth;
     ctx.stroke();
   }
 }
 
-function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexState, vp: Viewport, detail: number, ui: RenderUI): void {
+function drawStack(
+  ctx: CanvasRenderingContext2D,
+  units: UnitState[],
+  h: HexState,
+  vp: Viewport,
+  lod: MapLod,
+  ui: RenderUI,
+): void {
   const p = axialToPixel(h.q, h.r, HEX_SIZE);
   const center = worldToScreen(p.x, p.y, vp);
-  const size = Math.max(15, Math.min(64, HEX_SIZE * detail * 1.35));
-  const isSel = units.some((u) => ui.selectedUnitIds.includes(u.id));
+  const counter = getCounterPresentation(vp.scale, lod);
+  const size = counter.size;
+  const stack = projectStack(units, ui.selectedUnitIds, counter.maxVisible);
 
-  if (detail < 0.5) {
-    // Far: simple marker.
-    const u = units[0];
+  if (counter.mode === "summary") {
+    const u = stack.visible[0];
     ctx.fillStyle = u.side === "germany" ? C.ger : C.sov;
     ctx.strokeStyle = "#15110a";
-    ctx.lineWidth = 1;
+    ctx.lineWidth = ui.selectedUnitIds.includes(u.id) ? 2 : 1;
     ctx.beginPath();
-    ctx.arc(center.x, center.y, Math.max(3, size * 0.22), 0, Math.PI * 2);
+    if (u.side === "germany") {
+      ctx.rect(center.x - size * 0.22, center.y - size * 0.19, size * 0.44, size * 0.38);
+    } else {
+      ctx.moveTo(center.x, center.y - size * 0.25);
+      ctx.lineTo(center.x + size * 0.24, center.y);
+      ctx.lineTo(center.x, center.y + size * 0.25);
+      ctx.lineTo(center.x - size * 0.24, center.y);
+      ctx.closePath();
+    }
     ctx.fill();
     ctx.stroke();
     if (units.length > 1) {
-      ctx.fillStyle = "#fff";
-      ctx.font = `${Math.round(size * 0.3)}px sans-serif`;
+      ctx.fillStyle = u.side === "germany" ? C.gerText : C.sovText;
+      ctx.font = `700 ${Math.round(size * 0.34)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(String(units.length), center.x, center.y);
@@ -470,23 +1086,47 @@ function drawStack(ctx: CanvasRenderingContext2D, units: UnitState[], h: HexStat
     return;
   }
 
-  const show = units.slice(0, 4);
+  const show = stack.visible;
   const dx = size * 0.16;
   for (let i = show.length - 1; i >= 0; i--) {
     const u = show[i];
     const ox = (i - (show.length - 1) / 2) * dx;
     const oy = (i - (show.length - 1) / 2) * dx;
-    drawCounter(ctx, u, center.x + ox, center.y + oy, size, isSel && i === 0);
+    drawCounter(
+      ctx,
+      u,
+      center.x + ox,
+      center.y + oy,
+      size,
+      ui.selectedUnitIds.includes(u.id),
+      counter.mode,
+    );
   }
-  if (units.length > 4) {
-    ctx.fillStyle = "#1a140a";
-    ctx.font = `600 ${Math.round(size * 0.26)}px sans-serif`;
+  if (stack.hiddenCount > 0) {
+    ctx.fillStyle = "#17120c";
+    ctx.strokeStyle = "rgba(232,209,150,0.64)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(center.x + size * 0.52, center.y + size * 0.42, size * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#f0dfb5";
+    ctx.font = `700 ${Math.round(size * 0.19)}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.fillText(`+${units.length - 4}`, center.x + size * 0.5, center.y + size * 0.5);
+    ctx.textBaseline = "middle";
+    ctx.fillText(`+${stack.hiddenCount}`, center.x + size * 0.52, center.y + size * 0.42);
   }
 }
 
-function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: number, size: number, selected: boolean): void {
+function drawCounter(
+  ctx: CanvasRenderingContext2D,
+  u: UnitState,
+  x: number,
+  y: number,
+  size: number,
+  selected: boolean,
+  mode: "compact" | "full",
+): void {
   const w = size * 0.92;
   const hgt = size * 0.78;
   const fill = u.side === "germany" ? C.ger : C.sov;
@@ -495,7 +1135,8 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   const accent = u.side === "germany" ? C.gerAccent : C.sovAccent;
   const x0 = x - w / 2;
   const y0 = y - hgt / 2;
-  const r = 3;
+  const isHq = u.echelon === "corps_hq" || u.echelon === "army_hq" || u.echelon === "front_hq";
+  const r = u.side === "germany" ? 2 : 4;
 
   // Shadow
   ctx.fillStyle = "rgba(0,0,0,0.35)";
@@ -503,7 +1144,17 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   ctx.fill();
   // Body
   ctx.fillStyle = fill;
-  roundRect(ctx, x0, y0, w, hgt, r);
+  if (u.side === "ussr" && isHq) {
+    ctx.beginPath();
+    ctx.moveTo(x0 + w * 0.12, y0);
+    ctx.lineTo(x0 + w, y0);
+    ctx.lineTo(x0 + w, y0 + hgt);
+    ctx.lineTo(x0, y0 + hgt);
+    ctx.lineTo(x0, y0 + hgt * 0.12);
+    ctx.closePath();
+  } else {
+    roundRect(ctx, x0, y0, w, hgt, r);
+  }
   ctx.fill();
   // Inner bevel
   ctx.strokeStyle = dark;
@@ -518,10 +1169,13 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   }
 
   // HQ stripe
-  const isHq = u.echelon === "corps_hq" || u.echelon === "army_hq" || u.echelon === "front_hq";
   if (isHq) {
     ctx.fillStyle = accent;
     ctx.fillRect(x0, y0, w, 2.4);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 0.9;
+    roundRect(ctx, x0 + 2.5, y0 + 2.5, w - 5, hgt - 5, Math.max(1, r - 1));
+    ctx.stroke();
   }
 
   ctx.textAlign = "center";
@@ -536,7 +1190,7 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   drawSymbol(ctx, u, x, y, size, txt, accent);
 
   // Stats row: atk / def / mv
-  if (size > 26) {
+  if (mode === "full") {
     ctx.font = `${Math.round(size * 0.17)}px sans-serif`;
     ctx.fillStyle = "rgba(255,255,255,0.92)";
     ctx.fillText(`${u.attack}-${u.defense}-${u.movement}`, x, y0 + hgt * 0.82);
@@ -554,9 +1208,20 @@ function drawCounter(ctx: CanvasRenderingContext2D, u: UnitState, x: number, y: 
   // Supply dot (top-right)
   const supColor: Record<string, string> = { full: "#7bbf6a", limited: "#d8c24a", low: "#e0a13b", isolated: "#cf5b3a", none: "#9c2f24" };
   if (size > 22) {
-    ctx.beginPath();
-    ctx.arc(x0 + w - 3, y0 + 3, pipR + 0.5, 0, Math.PI * 2);
+    const sx = x0 + w - 4;
+    const sy = y0 + 4;
     ctx.fillStyle = supColor[u.supplyState] ?? "#888";
+    ctx.beginPath();
+    if (u.supplyState === "full") {
+      ctx.arc(sx, sy, pipR + 0.5, 0, Math.PI * 2);
+    } else if (u.supplyState === "limited" || u.supplyState === "low") {
+      ctx.rect(sx - pipR, sy - pipR, pipR * 2, pipR * 2);
+    } else {
+      ctx.moveTo(sx, sy - pipR - 1);
+      ctx.lineTo(sx + pipR + 1, sy + pipR);
+      ctx.lineTo(sx - pipR - 1, sy + pipR);
+      ctx.closePath();
+    }
     ctx.fill();
   }
 }
