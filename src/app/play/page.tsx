@@ -11,6 +11,7 @@ import CombatPanel from "@/components/CombatPanel";
 import Modals from "@/components/Modals";
 import Toasts from "@/components/Toasts";
 import ToolRail from "@/components/ToolRail";
+import MobileToolSheet from "@/components/MobileToolSheet";
 import { SIDE_SHORT } from "@/lib/labels";
 import type { Side } from "@/engine/types";
 
@@ -26,6 +27,7 @@ export default function PlayPage() {
   const openPanel = useGame((s) => s.openPanel);
   const saveProgress = useGame((s) => s.saveProgress);
   const [showZOC, setShowZOC] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [handoffAcknowledgedFor, setHandoffAcknowledgedFor] = useState<Side | null>(null);
 
@@ -105,6 +107,18 @@ export default function PlayPage() {
             activeSide={state.activeSide}
             onHexClick={selectHex}
           />
+          <MobileToolSheet
+            open={mobileToolsOpen && !handoffPendingSide}
+            showZOC={showZOC}
+            saving={saving}
+            onToggle={() => setMobileToolsOpen((value) => !value)}
+            onHelp={() => setPanel("help")}
+            onObjectives={() => setPanel("objectives")}
+            onLog={() => setPanel("log")}
+            onReport={() => setPanel("report")}
+            onToggleZOC={() => setShowZOC((value) => !value)}
+            onSave={() => void onSave()}
+          />
         </main>
 
         <OperationalSheet key={`sheet:${state.activeSide}`} selectedHexId={selectedHexId} hasSelectedUnits={selectedUnitIds.length > 0} />
@@ -128,7 +142,7 @@ export default function PlayPage() {
             </p>
             <button
               className="mt-6 border border-staff-gold bg-staff-gold px-5 py-2 text-sm font-semibold text-staff-void"
-              onClick={() => setHandoffAcknowledgedFor(state.activeSide)}
+              onClick={() => { setMobileToolsOpen(false); setHandoffAcknowledgedFor(state.activeSide); }}
             >
               Продолжить за {SIDE_SHORT[state.activeSide]}
             </button>

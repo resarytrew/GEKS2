@@ -14,7 +14,7 @@ interface ToolRailProps {
 
 /** Secondary map actions live in one rail; they are intentionally absent from TopBar. */
 export default function ToolRail({ showZOC, saving, onHelp, onObjectives, onLog, onReport, onToggleZOC, onSave }: ToolRailProps) {
-  return <nav aria-label="Инструменты карты" className="flex w-11 shrink-0 flex-col items-center gap-1 border-r border-[#8f8978] bg-[#ebe1c9] py-2">
+  return <nav aria-label="Инструменты карты" className="hidden w-11 shrink-0 flex-col md:flex items-center gap-1 border-r border-[#8f8978] bg-[#ebe1c9] py-2">
     <ToolButton title="Справка" onClick={onHelp}><Icon name="help" className="h-4 w-4" /></ToolButton>
     <ToolButton title="Оперативные цели" onClick={onObjectives}><Icon name="target" className="h-4 w-4" /></ToolButton>
     <ToolButton title="Журнал штаба" onClick={onLog}><Icon name="journal" className="h-4 w-4" /></ToolButton>
