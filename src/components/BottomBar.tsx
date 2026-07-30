@@ -6,6 +6,7 @@ import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
 import { PHASE_HINT, PHASE_LABEL, SIDE_SHORT } from "@/lib/labels";
 import { Icon } from "@/components/Icon";
 import { getVisiblePhaseFlow } from "@/lib/phaseRail";
+import { getPrimaryPhaseAction } from "@/lib/primaryPhaseAction";
 import type { CardDefinition, CardEffect } from "@/engine/types";
 
 export default function BottomBar() {
@@ -18,6 +19,7 @@ export default function BottomBar() {
   const [tray, setTray] = useState(false);
   if (!state) return null;
   const hand = state.playerHands[state.activeSide];
+  const primaryAction = getPrimaryPhaseAction(state);
   const canPlay = ["planning", "command", "activation", "air"].includes(state.phase);
   const targetFor = (def: CardDefinition): string[] | null => {
     const needs = (kind: CardEffect["kind"]) => def.effects.some((effect) => effect.kind === kind);
@@ -35,7 +37,7 @@ export default function BottomBar() {
     <div className="flex h-[60px] items-center gap-3 px-3">
       <div className="hidden w-60 border-r border-[#55564b] pr-3 md:block"><div className="text-[9px] font-bold uppercase tracking-[.14em] text-[#c6beaa]">{PHASE_LABEL[state.phase]} · {SIDE_SHORT[state.activeSide]}</div><p className="mt-1 text-[10px] leading-tight text-[#c6beaa]">{PHASE_HINT[state.phase]}</p></div>
       <div className="phase-track hidden flex-1 items-center justify-center gap-4 lg:flex">{getVisiblePhaseFlow(state).map((phase, index) => <span key={phase.id} className={`text-[9px] uppercase tracking-[.11em] ${phase.status === "current" ? "font-bold text-[#e4c572]" : phase.status === "completed" ? "text-[#d2ccba]" : "text-[#a9a695]"}`}><b className="mr-1 font-serif">{index + 1}</b>{phase.label}</span>)}</div>
-      <div className="ml-auto flex items-center gap-2"><button onClick={() => setTray((value) => !value)} className={`flex items-center gap-2 border px-2.5 py-2 text-[10px] font-bold uppercase tracking-[.1em] ${tray ? "border-[#d3ad59] text-[#e4c572]" : "border-[#66675d] text-[#ddd4bd] hover:border-[#a7a18d]"}`}><Icon name="orders" className="h-4 w-4" />Приказы <span className="border-l border-current pl-2">{hand.length}</span></button></div>
+      <div className="ml-auto flex items-center gap-2"><button onClick={() => setTray((value) => !value)} className={`flex items-center gap-2 border px-2.5 py-2 text-[10px] font-bold uppercase tracking-[.1em] ${tray ? "border-[#d3ad59] text-[#e4c572]" : "border-[#66675d] text-[#ddd4bd] hover:border-[#a7a18d]"}`}><Icon name="orders" className="h-4 w-4" />Приказы <span className="border-l border-current pl-2">{hand.length}</span></button><button title={primaryAction.reason} disabled={primaryAction.disabled || !primaryAction.command} onClick={() => primaryAction.command && dispatch(primaryAction.command)} className="border border-[#c49b49] bg-[#a77b2d] px-3 py-2 text-[10px] font-bold uppercase tracking-[.1em] text-[#201f1a] hover:bg-[#c0933c] disabled:cursor-not-allowed disabled:opacity-40">{primaryAction.label}</button></div>
     </div>
   </footer>;
 }
