@@ -1,4 +1,14 @@
-import type { GameCommand, GameState, SaveGame } from "@/engine/types";
+import {
+  SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+  type GameCommand,
+  type GameState,
+  type LegacyReactionCondition,
+  type PlannedOrder,
+  type PlannedReaction,
+  type ReserveOrderData,
+  type ReserveTriggerCondition,
+  type SaveGame,
+} from "@/engine/types";
 import { replayCommands } from "@/engine/engine";
 import { createInitialState } from "@/scenarios/baltic-1941/scenario";
 
@@ -10,46 +20,118 @@ export type SaveMigrationResult =
   | { ok: true; save: SaveGame; migratedFrom?: number; warnings: string[] }
   | { ok: false; code: "INVALID_SAVE" | "UNSUPPORTED_SCHEMA"; message: string };
 
+type LegacyReserveTriggerCondition =
+  | ReserveTriggerCondition
+  | "friendly_retreat"
+  | "meeting_engagement"
+  | "objective_threatened";
+
+interface LegacyReserveOrderDataV4
+  extends Omit<ReserveOrderData, "triggerConditions"> {
+  triggerConditions: LegacyReserveTriggerCondition[];
+}
+
+interface LegacyPlannedOrderV4 extends Omit<PlannedOrder, "reserveData"> {
+  reserveData?: LegacyReserveOrderDataV4;
+}
+
+interface LegacyPlannedReactionV4
+  extends Omit<PlannedReaction, "condition"> {
+  condition: LegacyReactionCondition;
+  lossThreshold?: number;
+}
+
+interface LegacyGameCommandV4
+  extends Omit<GameCommand, "plannedOrder" | "reaction"> {
+  plannedOrder?: LegacyPlannedOrderV4;
+  reaction?: LegacyPlannedReactionV4;
+}
+
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : undefined;
 }
 
-function commandsFrom(value: unknown): GameCommand[] | undefined {
+function commandsFrom(value: unknown): LegacyGameCommandV4[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const commands: GameCommand[] = [];
+  const commands: LegacyGameCommandV4[] = [];
   for (const item of value) {
     const candidate = record(item);
     if (!candidate || typeof candidate.type !== "string") return undefined;
-    commands.push(candidate as unknown as GameCommand);
+    commands.push(candidate as unknown as LegacyGameCommandV4);
   }
   return commands;
 }
 
-function migrateCommand(command: GameCommand): GameCommand | undefined {
+interface CommandMigration {
+  command?: GameCommand;
+  warnings: string[];
+}
+
+function migrateCommand(command: LegacyGameCommandV4): CommandMigration {
   if (
     command.type === "UPSERT_REACTION" &&
     command.reaction?.condition === "loss_threshold"
   ) {
-    return undefined;
+    return {
+      warnings: [
+        "Устаревшая реакция loss_threshold удалена: порог потерь задаётся только lossTolerance приказа.",
+      ],
+    };
   }
   if (command.type !== "UPSERT_PLANNED_ORDER" || !command.plannedOrder) {
-    return command;
+    return { command: command as GameCommand, warnings: [] };
   }
   const order = command.plannedOrder;
+  const warnings: string[] = [];
+  let reserveData: ReserveOrderData | undefined;
+  if (order.reserveData) {
+    const supported = new Set<string>(
+      SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+    );
+    const removed = order.reserveData.triggerConditions.filter(
+      (condition) => !supported.has(condition),
+    );
+    const triggerConditions = order.reserveData.triggerConditions.filter(
+      (condition): condition is ReserveTriggerCondition =>
+        supported.has(condition),
+    );
+    if (removed.length > 0) {
+      warnings.push(
+        `Неподдерживаемые reserve triggers удалены: ${[...new Set(removed)].sort().join(", ")}.`,
+      );
+    }
+    reserveData = {
+      ...order.reserveData,
+      triggerConditions:
+        triggerConditions.length > 0
+          ? triggerConditions
+          : ["friendly_contact"],
+    };
+    if (triggerConditions.length === 0) {
+      warnings.push(
+        "Reserve order получил безопасный trigger friendly_contact после миграции.",
+      );
+    }
+  }
   return {
-    ...command,
-    plannedOrder: {
-      ...order,
-      priority: Number.isFinite(order.priority) ? order.priority : 1,
-      contactPolicy: order.contactPolicy ?? "attack",
-      lossTolerance: order.lossTolerance ?? "normal",
-      status: order.status ?? "draft",
-      progressIndex: order.progressIndex ?? 0,
-      movementSpentThisImpulse: order.movementSpentThisImpulse ?? 0,
-      remainingMovementBudget: order.remainingMovementBudget ?? 0,
+    command: {
+      ...command,
+      reaction: undefined,
+      plannedOrder: {
+        ...order,
+        reserveData,
+        priority: Number.isFinite(order.priority) ? order.priority : 1,
+        contactPolicy: order.contactPolicy ?? "attack",
+        lossTolerance: order.lossTolerance ?? "normal",
+        status: order.status ?? "draft",
+        progressIndex: order.progressIndex ?? 0,
+        movementSpentThisImpulse: order.movementSpentThisImpulse ?? 0,
+        remainingMovementBudget: order.remainingMovementBudget ?? 0,
+      },
     },
+    warnings,
   };
 }
 
@@ -86,13 +168,9 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
   if (!sourceCommands) {
     return { ok: false, code: "INVALID_SAVE", message: "Журнал команд отсутствует или повреждён." };
   }
-  const removedLossThreshold = sourceCommands.some(
-    (command) =>
-      command.type === "UPSERT_REACTION" &&
-      command.reaction?.condition === "loss_threshold",
-  );
-  const commands = sourceCommands
-    .map(migrateCommand)
+  const commandMigrations = sourceCommands.map(migrateCommand);
+  const commands = commandMigrations
+    .map((migration) => migration.command)
     .filter((command): command is GameCommand => !!command);
   const seed =
     typeof value.seed === "number"
@@ -113,12 +191,9 @@ export function migrateSaveGame(input: unknown): SaveMigrationResult {
     };
   }
   const sourceVersion = schemaVersion ?? 2;
-  const warnings: string[] = [];
-  if (removedLossThreshold) {
-    warnings.push(
-      "Устаревшая реакция loss_threshold удалена: порог потерь теперь задаётся lossTolerance приказа.",
-    );
-  }
+  const warnings = [
+    ...new Set(commandMigrations.flatMap((migration) => migration.warnings)),
+  ];
   if (sourceVersion < CURRENT_SCHEMA_VERSION) {
     warnings.push(
       `Сохранение v${sourceVersion} перенесено в v${CURRENT_SCHEMA_VERSION}; WEGO-команды будут воспроизведены правилами v0.4.1.`,

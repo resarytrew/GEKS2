@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type {
-  GameState,
-  PlannedOrder,
-  PlannedOrderType,
-  UnitState,
+import {
+  LAST_EXECUTION_IMPULSE,
+  type GameState,
+  type PlannedOrder,
+  type PlannedOrderType,
+  type UnitState,
 } from "@/engine/types";
 import {
   executePlannedOrder,
@@ -299,7 +300,7 @@ describe("v0.4 concrete order executors", () => {
         triggerRadius: 3,
         triggerConditions: ["friendly_contact" as const],
         targetPriority: ["17_29"],
-        maxCommitImpulse: 5,
+        maxCommitImpulse: LAST_EXECUTION_IMPULSE,
       },
     };
     const result = executePlannedOrder(state, order, context());
@@ -353,7 +354,7 @@ describe("v0.4 concrete order executors", () => {
       commandCost: 1,
       priority: 3,
       fromImpulse: 0,
-      toImpulse: 5,
+      toImpulse: LAST_EXECUTION_IMPULSE,
       maxUses: 1,
       uses: 0,
       status: "committed",

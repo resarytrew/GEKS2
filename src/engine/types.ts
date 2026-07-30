@@ -463,6 +463,30 @@ export type PlannedOrderType =
   | "prepare_demolition"
   | "build_pontoon";
 
+export const EXECUTION_IMPULSES = [
+  "06:00–09:00",
+  "09:00–12:00",
+  "12:00–15:00",
+  "15:00–18:00",
+  "18:00–21:00",
+  "NIGHT",
+] as const;
+
+export const EXECUTION_IMPULSE_COUNT = EXECUTION_IMPULSES.length;
+export const LAST_EXECUTION_IMPULSE = EXECUTION_IMPULSE_COUNT - 1;
+
+export function isNightImpulse(impulse: number): boolean {
+  return EXECUTION_IMPULSES[impulse] === "NIGHT";
+}
+
+export const SUPPORTED_RESERVE_TRIGGER_CONDITIONS = [
+  "friendly_contact",
+  "enemy_breakthrough",
+] as const;
+
+export type ReserveTriggerCondition =
+  (typeof SUPPORTED_RESERVE_TRIGGER_CONDITIONS)[number];
+
 export interface PlannedOrder {
   id: string;
   side: Side;
@@ -503,13 +527,7 @@ export interface PlannedOrder {
 
 export interface ReserveOrderData {
   triggerRadius: number;
-  triggerConditions: Array<
-    | "friendly_contact"
-    | "friendly_retreat"
-    | "enemy_breakthrough"
-    | "meeting_engagement"
-    | "objective_threatened"
-  >;
+  triggerConditions: ReserveTriggerCondition[];
   targetPriority: string[];
   maxCommitImpulse: number;
 }
@@ -520,14 +538,21 @@ export interface ImpulseMovementBudget {
   remaining: number;
 }
 
+export const SUPPORTED_REACTION_CONDITIONS = [
+  "enemy_approaches_bridge",
+  "encirclement_threat",
+  "contact_created",
+  "friendly_contact",
+  "enemy_breakthrough",
+  "route_blocked",
+] as const;
+
 export type ReactionCondition =
-  | "enemy_approaches_bridge"
-  | "encirclement_threat"
-  | "contact_created"
-  | "friendly_contact"
-  | "enemy_breakthrough"
-  | "loss_threshold"
-  | "route_blocked";
+  (typeof SUPPORTED_REACTION_CONDITIONS)[number];
+
+export type LegacyReactionCondition =
+  | ReactionCondition
+  | "loss_threshold";
 
 export interface PlannedReaction {
   id: string;
@@ -544,7 +569,6 @@ export interface PlannedReaction {
   uses: number;
   status: "draft" | "committed" | "resolved" | "expired" | "cancelled";
   fallbackRoute?: string[];
-  lossThreshold?: number;
 }
 
 export interface SidePlan {

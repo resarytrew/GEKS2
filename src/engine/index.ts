@@ -12,6 +12,7 @@ export { validateStateInvariants } from "./invariants";
 export {
   executePlannedOrder,
   evaluateMovementStep,
+  validateFallbackRoute,
   movementBudgetForOrder,
   ORDER_COST,
 } from "./order-execution";
@@ -36,6 +37,7 @@ export {
 } from "./support";
 export {
   allContactEntityIds,
+  createSideSpecificContact,
   normalizeContactState,
 } from "./contact";
 export {

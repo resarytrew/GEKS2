@@ -4,7 +4,11 @@ import { parseKey, sharedEdge } from "@/engine/hex";
 import { directionForEdge, updateSharedEdge } from "@/engine/edges";
 import { createInitialState } from "@/scenarios/baltic-1941/scenario";
 
-function relocate(state: GameState, unitId: string, hexId: string): UnitState {
+export function relocateWegoFixtureUnit(
+  state: GameState,
+  unitId: string,
+  hexId: string,
+): UnitState {
   const unit = state.units[unitId];
   if (!unit) throw new Error(`Fixture unit ${unitId} is missing.`);
   const origin = state.hexes[unit.hexId];
@@ -20,6 +24,8 @@ function relocate(state: GameState, unitId: string, hexId: string): UnitState {
  * Compact, deterministic acceptance fixture around Raseiniai. It retains the
  * historical scenario data but places both mobile groups, their HQs, and an
  * engineer inside a small test area suitable for one-day WEGO walkthroughs.
+ * This is an engineering test fixture, not a historically exact scenario.
+ * Every role/trait/resource mutation remains local to this state builder.
  */
 export function createRaseiniaiWegoTestState(
   seed = 22061941,
@@ -31,36 +37,61 @@ export function createRaseiniaiWegoTestState(
   });
   state.scenarioId = "baltic-1941-raseiniai-wego-test";
 
-  relocate(state, "ger-1pz", "16_29");
-  relocate(state, "ger-6pz", "16_30");
-  relocate(state, "ger-hq-pzg4", "16_29");
-  const germanArtillery = relocate(state, "ger-269", "16_29");
+  relocateWegoFixtureUnit(state, "ger-1pz", "16_29");
+  relocateWegoFixtureUnit(state, "ger-6pz", "16_30");
+  relocateWegoFixtureUnit(state, "ger-3mot", "16_28");
+  relocateWegoFixtureUnit(state, "ger-hq-pzg4", "16_29");
+  relocateWegoFixtureUnit(state, "ger-hq-xxxi", "16_29");
+  relocateWegoFixtureUnit(state, "ger-hq-lvi", "16_28");
+  const germanArtillery = relocateWegoFixtureUnit(
+    state,
+    "ger-269",
+    "16_29",
+  );
   germanArtillery.unitType = "artillery";
   germanArtillery.echelon = "support";
   germanArtillery.traits = [
     ...new Set([...germanArtillery.traits, "artillery", "heavy_at"]),
   ];
-  relocate(state, "sov-2td", "17_29");
-  relocate(state, "sov-5td", "18_29");
-  relocate(state, "sov-hq-3mc", "17_28");
-  const engineer = relocate(state, "sov-10sd", "18_28");
+  relocateWegoFixtureUnit(state, "sov-2td", "17_29");
+  relocateWegoFixtureUnit(state, "sov-5td", "18_29");
+  relocateWegoFixtureUnit(state, "sov-hq-3mc", "17_28");
+  const engineer = relocateWegoFixtureUnit(state, "sov-10sd", "18_28");
   engineer.traits = [...new Set([...engineer.traits, "engineer", "demolition"])];
-  const sovietArtillery = relocate(state, "sov-48sd", "17_30");
+  const sovietArtillery = relocateWegoFixtureUnit(
+    state,
+    "sov-48sd",
+    "17_30",
+  );
   sovietArtillery.unitType = "artillery";
   sovietArtillery.echelon = "support";
   sovietArtillery.traits = [
     ...new Set([...sovietArtillery.traits, "artillery"]),
   ];
+  const noFuelUnit = relocateWegoFixtureUnit(state, "ger-8pz", "15_29");
+  noFuelUnit.fuel = 0;
+  noFuelUnit.commandState = "in_command";
+  noFuelUnit.supplyState = "full";
+  const noMovementUnit = relocateWegoFixtureUnit(
+    state,
+    "sov-84md",
+    "18_30",
+  );
+  noMovementUnit.movement = 0;
+  noMovementUnit.commandState = "in_command";
+  noMovementUnit.supplyState = "full";
 
   for (const id of [
     "16_29",
     "16_30",
+    "16_28",
     "17_29",
     "17_28",
     "18_28",
     "18_29",
     "15_29",
     "17_30",
+    "18_30",
   ]) {
     const hasGerman = state.hexes[id].stackUnitIds.some(
       (unitId) => state.units[unitId]?.side === "germany",
@@ -92,6 +123,7 @@ export function createRaseiniaiWegoTestState(
   for (const readyId of [
     "ger-1pz",
     "ger-6pz",
+    "ger-3mot",
     "sov-2td",
     "sov-5td",
     "ger-269",

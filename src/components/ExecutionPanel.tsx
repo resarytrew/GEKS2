@@ -1,7 +1,10 @@
 "use client";
 
 import { useGame } from "@/store/gameStore";
-import { IMPULSE_LABELS } from "@/engine/wego";
+import {
+  IMPULSE_LABELS,
+  LAST_EXECUTION_IMPULSE,
+} from "@/engine/wego";
 import {
   ORDER_STATUS_LABELS,
   ORDER_TYPE_LABELS,
@@ -48,7 +51,9 @@ export default function ExecutionPanel() {
         <div className="mt-2 text-[10px] text-staff-mute">
           Текущий интервал:{" "}
           <span className="text-staff-ink">
-            {IMPULSE_LABELS[Math.min(state.impulse, 5)]}
+            {IMPULSE_LABELS[
+              Math.min(state.impulse, LAST_EXECUTION_IMPULSE)
+            ]}
           </span>
         </div>
       )}

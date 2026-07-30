@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type {
-  ContactState,
-  GameState,
-  PlannedOrder,
+import {
+  LAST_EXECUTION_IMPULSE,
+  type ContactState,
+  type GameState,
+  type PlannedOrder,
 } from "@/engine/types";
 import { applyCommand, replayCommands } from "@/engine/engine";
 import {
@@ -176,7 +177,7 @@ describe("v0.4.1 validated movement intents", () => {
       commandCost: 0,
       priority: 9,
       fromImpulse: 0,
-      toImpulse: 5,
+      toImpulse: LAST_EXECUTION_IMPULSE,
       maxUses: 1,
       uses: 0,
       status: "committed",

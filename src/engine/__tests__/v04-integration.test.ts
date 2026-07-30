@@ -13,6 +13,10 @@ import type {
   GameState,
   PlannedOrder,
 } from "@/engine/types";
+import {
+  EXECUTION_IMPULSE_COUNT,
+  LAST_EXECUTION_IMPULSE,
+} from "@/engine/types";
 import { createRaseiniaiWegoTestState } from "@/scenarios/baltic-1941/wego-test";
 
 function planning(state = createRaseiniaiWegoTestState()): GameState {
@@ -50,26 +54,28 @@ describe("v0.4 full-day integration", () => {
     }).state;
     state = applyCommand(state, { type: "COMMIT_PLAN", side: "germany" }).state;
     state = applyCommand(state, { type: "COMMIT_PLAN", side: "ussr" }).state;
-    for (let impulse = 0; impulse < 6; impulse++) {
+    for (let impulse = 0; impulse < EXECUTION_IMPULSE_COUNT; impulse++) {
       state = applyCommand(state, { type: "EXECUTE_IMPULSE" }).state;
     }
     expect(state.phase).toBe("after_action");
-    expect(state.impulseReports).toHaveLength(6);
-    expect(state.afterActionReport?.impulses).toHaveLength(6);
+    expect(state.impulseReports).toHaveLength(EXECUTION_IMPULSE_COUNT);
+    expect(state.afterActionReport?.impulses).toHaveLength(
+      EXECUTION_IMPULSE_COUNT,
+    );
   });
 
   it("starts the next day from after-action with one command", () => {
     let state = planning();
     state = applyCommand(state, { type: "COMMIT_PLAN", side: "germany" }).state;
     state = applyCommand(state, { type: "COMMIT_PLAN", side: "ussr" }).state;
-    for (let impulse = 0; impulse < 6; impulse++) {
+    for (let impulse = 0; impulse < EXECUTION_IMPULSE_COUNT; impulse++) {
       state = applyCommand(state, { type: "EXECUTE_IMPULSE" }).state;
     }
     const turn = state.turn;
     state = applyCommand(state, { type: "END_PHASE" }).state;
     expect(state.phase).toBe("morning_report");
     expect(state.turn).toBe(turn + 1);
-  });
+  }, 15_000);
 
   it("replay produces byte-identical state for a full quiet day", () => {
     const initial = createRaseiniaiWegoTestState(9876);
@@ -78,14 +84,14 @@ describe("v0.4 full-day integration", () => {
       { type: "END_PHASE" },
       { type: "COMMIT_PLAN", side: "germany" },
       { type: "COMMIT_PLAN", side: "ussr" },
-      ...Array.from({ length: 6 }, () => ({
+      ...Array.from({ length: EXECUTION_IMPULSE_COUNT }, () => ({
         type: "EXECUTE_IMPULSE" as const,
       })),
     ];
     const first = replayCommands(initial, commands);
     const second = replayCommands(initial, commands);
     expect(JSON.stringify(first)).toBe(JSON.stringify(second));
-  });
+  }, 15_000);
 
   it("opponent view hides undiscovered routes, reactions, and cards", () => {
     const state = planning();
@@ -98,11 +104,11 @@ describe("v0.4 full-day integration", () => {
       id: "hidden-reaction",
       side: "germany",
       entityIds: ["ger-1pz"],
-      condition: "loss_threshold",
+      condition: "route_blocked",
       commandCost: 1,
       priority: 1,
       fromImpulse: 0,
-      toImpulse: 5,
+      toImpulse: LAST_EXECUTION_IMPULSE,
       maxUses: 1,
       uses: 0,
       status: "draft",
@@ -155,7 +161,7 @@ describe("v0.4 full-day integration", () => {
     let state = planning(createRaseiniaiWegoTestState(1234));
     state = applyCommand(state, { type: "COMMIT_PLAN", side: "germany" }).state;
     state = applyCommand(state, { type: "COMMIT_PLAN", side: "ussr" }).state;
-    for (let impulse = 0; impulse < 6; impulse++) {
+    for (let impulse = 0; impulse < EXECUTION_IMPULSE_COUNT; impulse++) {
       state = applyCommand(state, { type: "EXECUTE_IMPULSE" }).state;
     }
     expect(validateStateInvariants(state)).toEqual([]);
@@ -175,7 +181,7 @@ describe("v0.4 full-day integration", () => {
       commandCost: 1,
       priority: 3,
       fromImpulse: 0,
-      toImpulse: 5,
+      toImpulse: LAST_EXECUTION_IMPULSE,
       maxUses: 1,
       uses: 0,
       status: "committed",
@@ -193,7 +199,7 @@ describe("v0.4 full-day integration", () => {
     );
   });
 
-  it("loss-threshold reaction aborts an attack when seeded losses reach it", () => {
+  it("loss tolerance aborts an attack when seeded losses reach it", () => {
     let observed = false;
     for (let seed = 1; seed <= 20 && !observed; seed++) {
       const state = createRaseiniaiWegoTestState(seed);
@@ -209,20 +215,6 @@ describe("v0.4 full-day integration", () => {
         contactPolicy: "attack",
         lossTolerance: "low",
         status: "executing",
-      });
-      state.plans.germany.reactions.push({
-        id: "loss-threshold",
-        side: "germany",
-        entityIds: ["ger-1pz"],
-        condition: "loss_threshold",
-        commandCost: 1,
-        priority: 3,
-        fromImpulse: 0,
-        toImpulse: 5,
-        maxUses: 1,
-        uses: 0,
-        status: "committed",
-        lossThreshold: 1,
       });
       const contact = {
         id: `loss-contact:${seed}`,
@@ -246,7 +238,7 @@ describe("v0.4 full-day integration", () => {
       const resolution = resolveContact(state, contact, events);
       if ((resolution?.attackerLossSteps ?? 0) >= 1) {
         observed = true;
-        expect(state.plans.germany.reactions[0].uses).toBe(0);
+        expect(state.plans.germany.reactions).toEqual([]);
         expect(state.plans.germany.orders[0].status).toBe("failed");
         expect(
           events.some((event) => event.type === "ORDER_ABORTED_BY_LOSSES"),

@@ -8,13 +8,15 @@ import {
   sanitizeStateForSide,
 } from "@/engine/wego";
 import { createInitialState } from "@/scenarios/baltic-1941/scenario";
-import type {
-  GameCommand,
-  GameState,
-  PlannedOrder,
-  PlannedReaction,
-  Side,
-  UnitState,
+import {
+  EXECUTION_IMPULSE_COUNT,
+  LAST_EXECUTION_IMPULSE,
+  type GameCommand,
+  type GameState,
+  type PlannedOrder,
+  type PlannedReaction,
+  type Side,
+  type UnitState,
 } from "@/engine/types";
 
 function planning(seed = 22061941): GameState {
@@ -248,7 +250,7 @@ describe("WEGO impulse execution", () => {
     let state = planning();
     state = commit(state, "germany");
     state = commit(state, "ussr");
-    for (let impulse = 0; impulse < 6; impulse++) {
+    for (let impulse = 0; impulse < EXECUTION_IMPULSE_COUNT; impulse++) {
       state = applyCommand(state, { type: "EXECUTE_IMPULSE" }).state;
     }
     expect(state.phase).toBe("after_action");
@@ -289,7 +291,7 @@ describe("WEGO reactions, replay and concurrency", () => {
       commandCost: 0,
       priority: 10,
       fromImpulse: 0,
-      toImpulse: 5,
+      toImpulse: LAST_EXECUTION_IMPULSE,
       maxUses: 1,
       uses: 0,
       status: "draft",

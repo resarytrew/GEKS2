@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { useGame } from "@/store/gameStore";
-import { assessOrderReliability, IMPULSE_LABELS } from "@/engine/wego";
+import {
+  assessOrderReliability,
+  IMPULSE_LABELS,
+  LAST_EXECUTION_IMPULSE,
+} from "@/engine/wego";
 import { getEligibleSupportUnits } from "@/engine/support";
 import {
   ORDER_RELIABILITY_LABELS,
@@ -10,11 +14,12 @@ import {
   ORDER_TYPE_LABELS,
 } from "@/engine/presentation";
 import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
-import type {
-  PlannedOrder,
-  PlannedOrderType,
-  PlannedReaction,
-  ReactionCondition,
+import {
+  SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+  type PlannedOrder,
+  type PlannedOrderType,
+  type PlannedReaction,
+  type ReactionCondition,
 } from "@/engine/types";
 
 const ROUTE_ORDERS = new Set<PlannedOrderType>([
@@ -39,7 +44,6 @@ export default function OrderPlanningPanel() {
   const [lossTolerance, setLossTolerance] =
     useState<PlannedOrder["lossTolerance"]>("normal");
   const [targetHexId, setTargetHexId] = useState("");
-  const [fallbackHexId, setFallbackHexId] = useState("");
   const [bridgeEdge, setBridgeEdge] = useState(0);
   const [waitFor, setWaitFor] = useState<string[]>([]);
   const [supportIds, setSupportIds] = useState<string[]>([]);
@@ -90,9 +94,6 @@ export default function OrderPlanningPanel() {
           supportIds,
           waitForEntityIds: [...waitFor],
           cardIds,
-          fallbackHexId: fallbackHexId || undefined,
-          fallbackRoute:
-            fallbackHexId && lead ? [lead.hexId, fallbackHexId] : undefined,
           bridgeHexId:
             orderType === "prepare_demolition" || orderType === "build_pontoon"
               ? derivedTarget || lead.hexId
@@ -105,9 +106,11 @@ export default function OrderPlanningPanel() {
             orderType === "reserve"
               ? {
                   triggerRadius: 2,
-                  triggerConditions: ["friendly_contact", "enemy_breakthrough"],
+                  triggerConditions: [
+                    ...SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+                  ],
                   targetPriority: derivedTarget ? [derivedTarget] : [],
-                  maxCommitImpulse: 5,
+                  maxCommitImpulse: LAST_EXECUTION_IMPULSE,
                 }
               : undefined,
           status: "draft",
@@ -123,7 +126,6 @@ export default function OrderPlanningPanel() {
       setCardIds([]);
       setWaitFor([]);
       setTargetHexId("");
-      setFallbackHexId("");
     }
   };
 
@@ -223,12 +225,6 @@ export default function OrderPlanningPanel() {
               value={targetHexId || derivedTarget}
               onChange={setTargetHexId}
               placeholder="выберите на карте"
-            />
-            <TextField
-              label="Запасной рубеж"
-              value={fallbackHexId}
-              onChange={setFallbackHexId}
-              placeholder="q_r"
             />
             {(orderType === "prepare_demolition" ||
               orderType === "build_pontoon") && (
@@ -406,7 +402,6 @@ function ReactionTemplates({
   const templates: Array<{ condition: ReactionCondition; label: string }> = [
     { condition: "enemy_approaches_bridge", label: "Подрыв моста" },
     { condition: "encirclement_threat", label: "Отход от окружения" },
-    { condition: "route_blocked", label: "Обход блокировки" },
   ];
   return (
     <details className="mt-3 border-t border-staff-edge pt-2">
@@ -432,14 +427,10 @@ function ReactionTemplates({
                 commandCost: 1,
                 priority: 2,
                 fromImpulse: 0,
-                toImpulse: 5,
+                toImpulse: LAST_EXECUTION_IMPULSE,
                 maxUses: 1,
                 uses: 0,
                 status: "draft",
-                fallbackRoute:
-                  targetHexId && entityIds[0]
-                    ? [state.units[entityIds[0]].hexId, targetHexId]
-                    : undefined,
               };
               dispatch({
                 type: "UPSERT_REACTION",

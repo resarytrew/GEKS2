@@ -9,6 +9,13 @@ import type {
   ValidatedMovementIntent,
 } from "@/engine/types";
 import {
+  EXECUTION_IMPULSE_COUNT,
+  EXECUTION_IMPULSES,
+  LAST_EXECUTION_IMPULSE,
+  SUPPORTED_REACTION_CONDITIONS,
+  SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+} from "@/engine/types";
+import {
   commandInfo,
   endOfDayScoring,
   evaluateObjectives,
@@ -31,22 +38,25 @@ import {
   executePlannedOrder,
   evaluateMovementStep,
   ORDER_COST,
+  triggerRouteBlockedReaction,
+  validateFallbackRoute,
   type ImpulseExecutionContext,
 } from "@/engine/order-execution";
 import { resolveContact } from "@/engine/wego-combat";
 import { buildAfterActionReport } from "@/engine/after-action";
 import { eligibleSupportIds } from "@/engine/support";
-import { allContactEntityIds } from "@/engine/contact";
+import {
+  allContactEntityIds,
+  createSideSpecificContact,
+} from "@/engine/contact";
 import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
 
-export const IMPULSE_LABELS = [
-  "06:00–09:00",
-  "09:00–12:00",
-  "12:00–15:00",
-  "15:00–18:00",
-  "18:00–21:00",
-  "NIGHT",
-] as const;
+export const IMPULSE_LABELS = EXECUTION_IMPULSES;
+export {
+  EXECUTION_IMPULSE_COUNT,
+  EXECUTION_IMPULSES,
+  LAST_EXECUTION_IMPULSE,
+};
 
 const enemyOf = (side: Side): Side =>
   side === "germany" ? "ussr" : "germany";
@@ -149,11 +159,11 @@ function validateOrder(
   if (
     !Number.isInteger(order.startImpulse) ||
     order.startImpulse < 0 ||
-    order.startImpulse >= IMPULSE_LABELS.length
+    order.startImpulse >= EXECUTION_IMPULSE_COUNT
   ) {
     return invalid(
       "INVALID_START_IMPULSE",
-      "Импульс начала должен быть от 0 до 5.",
+      `Импульс начала должен быть от 0 до ${LAST_EXECUTION_IMPULSE}.`,
     );
   }
   if (order.entityIds.length === 0) {
@@ -263,29 +273,17 @@ function validateOrder(
     }
   }
   if (order.fallbackRoute) {
-    const origin = state.units[order.entityIds[0]].hexId;
-    if (
-      order.fallbackRoute[0] !== origin ||
-      new Set(order.fallbackRoute).size !== order.fallbackRoute.length
-    ) {
+    const fallbackValidation = validateFallbackRoute(
+      state,
+      side,
+      order.entityIds,
+      order.fallbackRoute,
+    );
+    if (!fallbackValidation.valid) {
       return invalid(
-        "INVALID_FALLBACK_ROUTE",
-        "Запасной маршрут должен начинаться в гексе части и не содержать циклов.",
+        fallbackValidation.code,
+        fallbackValidation.message,
       );
-    }
-    for (let index = 1; index < order.fallbackRoute.length; index++) {
-      if (
-        !state.hexes[order.fallbackRoute[index]] ||
-        sharedEdge(
-          parseKey(order.fallbackRoute[index - 1]),
-          parseKey(order.fallbackRoute[index]),
-        ) == null
-      ) {
-        return invalid(
-          "INVALID_FALLBACK_ROUTE",
-          "Запасной маршрут содержит несмежный или отсутствующий гекс.",
-        );
-      }
     }
   }
   if (order.orderType === "prepared_attack") {
@@ -350,21 +348,23 @@ function validateOrder(
   }
   if (order.orderType === "reserve") {
     const data = order.reserveData;
-    const supported = new Set(["friendly_contact", "enemy_breakthrough"]);
+    const supported = new Set<string>(
+      SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+    );
     if (
       !data ||
       data.triggerConditions.length === 0 ||
       data.triggerConditions.some((condition) => !supported.has(condition))
     ) {
       return invalid(
-        "UNSUPPORTED_RESERVE_TRIGGER",
+        "ORDER_UNSUPPORTED_RESERVE_TRIGGER",
         "Поддерживаются только friendly_contact и enemy_breakthrough.",
       );
     }
     if (
       data.triggerRadius < 1 ||
       data.maxCommitImpulse < order.startImpulse ||
-      data.maxCommitImpulse > 5 ||
+      data.maxCommitImpulse > LAST_EXECUTION_IMPULSE ||
       data.targetPriority.some((hexId) => !state.hexes[hexId])
     ) {
       return invalid(
@@ -464,6 +464,16 @@ export function validateWegoCommand(
         "Нельзя назначить реакцию другой стороны.",
       );
     }
+    if (
+      !new Set<string>(SUPPORTED_REACTION_CONDITIONS).has(
+        command.reaction.condition,
+      )
+    ) {
+      return invalid(
+        "REACTION_UNSUPPORTED_CONDITION",
+        "Условие реакции не поддерживается текущей версией движка.",
+      );
+    }
     if (command.reaction.maxUses < 1) {
       return invalid(
         "INVALID_REACTION_LIMIT",
@@ -472,13 +482,27 @@ export function validateWegoCommand(
     }
     if (
       command.reaction.fromImpulse < 0 ||
-      command.reaction.toImpulse > 5 ||
+      command.reaction.toImpulse > LAST_EXECUTION_IMPULSE ||
       command.reaction.fromImpulse > command.reaction.toImpulse
     ) {
       return invalid(
         "INVALID_REACTION_WINDOW",
         "Некорректное окно реакции.",
       );
+    }
+    if (command.reaction.fallbackRoute) {
+      const fallbackValidation = validateFallbackRoute(
+        state,
+        side,
+        command.reaction.entityIds,
+        command.reaction.fallbackRoute,
+      );
+      if (!fallbackValidation.valid) {
+        return invalid(
+          fallbackValidation.code,
+          fallbackValidation.message,
+        );
+      }
     }
   }
   if (command.type === "COMMIT_PLAN") {
@@ -588,7 +612,7 @@ function createMeetingContact(
   const id = `contact:${state.turn}:${context.impulse}:meeting:${entityIds.join(":")}`;
   const existing = state.contacts.find((contact) => contact.id === id);
   if (existing) return existing;
-  const contact: ContactState = {
+  const contact = createSideSpecificContact({
     id,
     type: "MEETING_ENGAGEMENT",
     hexId: left.toHexId,
@@ -606,7 +630,7 @@ function createMeetingContact(
     detectedBy: ["germany", "ussr"],
     status: "ready",
     resolved: false,
-  };
+  });
   state.contacts.push(contact);
   context.createdContactIds.push(id);
   context.events.push({
@@ -627,7 +651,7 @@ function createMeetingContact(
 function triggerBridgeReaction(
   state: GameState,
   intent: ValidatedMovementIntent,
-  events: GameEvent[],
+  context: ImpulseExecutionContext,
 ): boolean {
   const edge = sharedEdge(
     parseKey(intent.fromHexId),
@@ -663,15 +687,29 @@ function triggerBridgeReaction(
   reaction.uses += 1;
   reaction.status =
     reaction.uses >= reaction.maxUses ? "resolved" : "committed";
-  events.push({ type: "REACTION_TRIGGERED", reactionId: reaction.id });
-  events.push({ type: "BRIDGE_DESTROYED", hexId: intent.fromHexId, edge });
+  context.events.push({
+    type: "REACTION_TRIGGERED",
+    reactionId: reaction.id,
+  });
+  context.events.push({
+    type: "BRIDGE_DESTROYED",
+    hexId: intent.fromHexId,
+    edge,
+  });
   const intentOrder = state.plans[intent.side].orders.find(
     (order) => order.id === intent.orderId,
   );
   if (!intentOrder) return true;
+  const fallback = triggerRouteBlockedReaction(
+    state,
+    intentOrder,
+    intent.toHexId,
+    context,
+  );
+  if (fallback) return true;
   intentOrder.status = "failed";
   intentOrder.failureReason = "Мост подорван реакцией противника.";
-  events.push({
+  context.events.push({
     type: "ORDER_FAILED",
     orderId: intentOrder.id,
     reason: intentOrder.failureReason,
@@ -709,6 +747,20 @@ export function triggerEncirclementWithdrawals(
         );
       });
       if (threatened.length === 0 || !reaction.fallbackRoute) continue;
+      const fallbackValidation = validateFallbackRoute(
+        state,
+        side,
+        threatened,
+        reaction.fallbackRoute,
+      );
+      if (!fallbackValidation.valid) {
+        context.events.push({
+          type: "REACTION_FAILED",
+          reactionId: reaction.id,
+          reason: `${fallbackValidation.code}: ${fallbackValidation.message}`,
+        });
+        continue;
+      }
       const temporaryOrder: PlannedOrder = {
         id: `reaction-order:${reaction.id}:${state.impulse}`,
         side,
@@ -794,7 +846,7 @@ function executeImpulse(state: GameState, events: GameEvent[]): void {
       events.push({
         type: "ORDER_DELAYED",
         orderId: order.id,
-        untilImpulse: Math.min(5, impulse + 1),
+        untilImpulse: Math.min(LAST_EXECUTION_IMPULSE, impulse + 1),
         reasons: order.delayReasons,
       });
     }
@@ -843,7 +895,7 @@ function executeImpulse(state: GameState, events: GameEvent[]): void {
   for (const intent of intents) {
     if (
       !meetingOrderIds.has(intent.orderId) &&
-      triggerBridgeReaction(state, intent, events)
+      triggerBridgeReaction(state, intent, context)
     ) {
       bridgeStopped.add(intent.orderId);
     }
@@ -928,7 +980,7 @@ function executeImpulse(state: GameState, events: GameEvent[]): void {
   });
 
   state.impulse += 1;
-  if (state.impulse >= IMPULSE_LABELS.length) {
+  if (state.impulse >= EXECUTION_IMPULSE_COUNT) {
     events.push(...endOfDayScoring(state));
     events.push(...evaluateObjectives(state));
     state.afterActionReport = buildAfterActionReport(state, events);
@@ -1157,7 +1209,7 @@ export function applyWegoCommand(
       );
       state.rngCursor = delay.cursor;
       order.actualStartImpulse = Math.min(
-        5,
+        LAST_EXECUTION_IMPULSE,
         order.startImpulse + delay.value,
       );
       order.delayReasons = reliability.reasons;

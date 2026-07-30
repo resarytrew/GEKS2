@@ -1,4 +1,9 @@
-import type { GameCommand, GameState, PlannedOrder } from "@/engine/types";
+import {
+  EXECUTION_IMPULSE_COUNT,
+  type GameCommand,
+  type GameState,
+  type PlannedOrder,
+} from "@/engine/types";
 import { applyCommand } from "@/engine/engine";
 import { createRaseiniaiWegoTestState } from "@/scenarios/baltic-1941/wego-test";
 
@@ -21,7 +26,6 @@ function order(
     contactPolicy: "attack",
     lossTolerance: "normal",
     supportIds,
-    fallbackRoute: [state.units[unitId].hexId],
     remainingMovementBudget: 10,
     status: "draft",
   };
@@ -38,6 +42,8 @@ export function createWegoV041AcceptanceState(
     germany: { side: "germany", orders: [], reactions: [], committed: false },
     ussr: { side: "ussr", orders: [], reactions: [], committed: false },
   };
+  state.headquarters["ger-hq-xxxi"].commQuality = 5;
+  state.headquarters["sov-hq-3mc"].commQuality = 5;
   return state;
 }
 
@@ -73,7 +79,7 @@ export function wegoV041AcceptanceCommands(
     { type: "COMMIT_PLAN", side: "germany" },
     { type: "COMMIT_PLAN", side: "ussr" },
     ...Array.from(
-      { length: 6 },
+      { length: EXECUTION_IMPULSE_COUNT },
       (): GameCommand => ({ type: "EXECUTE_IMPULSE" }),
     ),
   ];

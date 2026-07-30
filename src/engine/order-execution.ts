@@ -10,6 +10,10 @@ import type {
   ValidatedMovementIntent,
 } from "@/engine/types";
 import {
+  LAST_EXECUTION_IMPULSE,
+  isNightImpulse,
+} from "@/engine/types";
+import {
   canStackInto,
   commandInfo,
   edgeCost,
@@ -24,6 +28,7 @@ import {
   sharedEdgeKey,
   updateSharedEdge,
 } from "@/engine/edges";
+import { createSideSpecificContact } from "@/engine/contact";
 
 export interface ImpulseExecutionContext {
   impulse: number;
@@ -178,7 +183,7 @@ export function movementBudgetForOrder(
         readinessFactor(unit),
     ),
   );
-  const night = state.impulse === 5 ? 0.7 : 1;
+  const night = isNightImpulse(state.impulse) ? 0.7 : 1;
   const carry = order.remainingMovementBudget ?? 0;
   const available = Math.max(
     0,
@@ -203,6 +208,87 @@ export interface MovementStepEvaluationOptions {
   toHexId?: string;
   availableMovement?: number;
   allowEnemyOccupiedTarget?: boolean;
+}
+
+export type FallbackRouteErrorCode =
+  | "FALLBACK_ROUTE_START_MISMATCH"
+  | "FALLBACK_ROUTE_NOT_CONTIGUOUS"
+  | "FALLBACK_ROUTE_INVALID_HEX"
+  | "FALLBACK_ROUTE_BLOCKED";
+
+export type FallbackRouteValidation =
+  | { valid: true }
+  | {
+      valid: false;
+      code: FallbackRouteErrorCode;
+      message: string;
+    };
+
+export function validateFallbackRoute(
+  state: GameState,
+  side: Side,
+  entityIds: readonly string[],
+  route: readonly string[] | undefined,
+): FallbackRouteValidation {
+  if (
+    !route ||
+    route.length < 2 ||
+    route.some((hexId) => !hexId || !state.hexes[hexId])
+  ) {
+    return {
+      valid: false,
+      code: "FALLBACK_ROUTE_INVALID_HEX",
+      message:
+        "Запасной маршрут должен содержать минимум два существующих гекса.",
+    };
+  }
+  const units = entityIds.map((id) => state.units[id]);
+  if (
+    entityIds.length === 0 ||
+    units.some(
+      (unit) =>
+        !unit ||
+        unit.eliminated ||
+        unit.side !== side ||
+        unit.hexId !== route[0],
+    )
+  ) {
+    return {
+      valid: false,
+      code: "FALLBACK_ROUTE_START_MISMATCH",
+      message:
+        "Запасной маршрут должен начинаться в общем текущем гексе всех назначенных частей.",
+    };
+  }
+  for (let index = 1; index < route.length; index++) {
+    const fromHexId = route[index - 1];
+    const toHexId = route[index];
+    if (
+      fromHexId === toHexId ||
+      sharedEdge(parseKey(fromHexId), parseKey(toHexId)) == null
+    ) {
+      return {
+        valid: false,
+        code: "FALLBACK_ROUTE_NOT_CONTIGUOUS",
+        message:
+          "Запасной маршрут содержит повторяющиеся подряд или несмежные гексы.",
+      };
+    }
+    if (
+      (units as UnitState[]).some(
+        (unit) =>
+          !Number.isFinite(edgeCost(state, unit, fromHexId, toHexId)),
+      )
+    ) {
+      return {
+        valid: false,
+        code: "FALLBACK_ROUTE_BLOCKED",
+        message:
+          "Запасной маршрут пересекает непроходимое ребро или занятый противником гекс.",
+      };
+    }
+  }
+  return { valid: true };
 }
 
 export function evaluateMovementStep(
@@ -405,7 +491,7 @@ function createContact(
   const id = `contact:${state.turn}:${context.impulse}:${type}:${entityIds.join(":")}`;
   const existing = state.contacts.find((contact) => contact.id === id);
   if (existing) return existing;
-  const contact: ContactState = {
+  const contact = createSideSpecificContact({
     id,
     type,
     hexId,
@@ -423,7 +509,7 @@ function createContact(
     detectedBy: ["germany", "ussr"],
     status: "ready",
     resolved: false,
-  };
+  });
   state.contacts.push(contact);
   context.createdContactIds.push(contact.id);
   context.events.push({
@@ -435,7 +521,7 @@ function createContact(
   return contact;
 }
 
-function triggerRouteBlockedReaction(
+export function triggerRouteBlockedReaction(
   state: GameState,
   order: PlannedOrder,
   blockedHexId: string,
@@ -458,7 +544,21 @@ function triggerRouteBlockedReaction(
         right.priority - left.priority || left.id.localeCompare(right.id),
     )[0];
   const lead = unitsForOrder(state, order)[0];
-  if (!reaction || !lead || reaction.fallbackRoute![0] !== lead.hexId) {
+  if (!reaction || !lead) {
+    return undefined;
+  }
+  const fallbackValidation = validateFallbackRoute(
+    state,
+    order.side,
+    order.entityIds,
+    reaction.fallbackRoute,
+  );
+  if (!fallbackValidation.valid) {
+    context.events.push({
+      type: "REACTION_FAILED",
+      reactionId: reaction.id,
+      reason: `${fallbackValidation.code}: ${fallbackValidation.message}`,
+    });
     return undefined;
   }
   reaction.uses += 1;
@@ -467,7 +567,10 @@ function triggerRouteBlockedReaction(
   order.route = [...reaction.fallbackRoute!];
   order.progressIndex = 0;
   order.status = "delayed";
-  order.actualStartImpulse = Math.min(5, context.impulse + 1);
+  order.actualStartImpulse = Math.min(
+    LAST_EXECUTION_IMPULSE,
+    context.impulse + 1,
+  );
   const triggered: GameEvent = {
     type: "REACTION_TRIGGERED",
     reactionId: reaction.id,
@@ -771,7 +874,7 @@ export function executePreparedAttackOrder(
     const mustWait = notArrived.some((unit) =>
       order.waitForEntityIds?.includes(unit.id),
     );
-    if (mustWait && context.impulse < 5) {
+    if (mustWait && context.impulse < LAST_EXECUTION_IMPULSE) {
       order.status = "delayed";
       const event: GameEvent = {
         type: "ORDER_DELAYED",
@@ -873,7 +976,7 @@ export function executeReserveOrder(
     triggerRadius: 2,
     triggerConditions: ["friendly_contact" as const],
     targetPriority: [],
-    maxCommitImpulse: 5,
+    maxCommitImpulse: LAST_EXECUTION_IMPULSE,
   };
   const targetRank = (hexId: string): number => {
     const index = data.targetPriority.indexOf(hexId);
@@ -1011,7 +1114,7 @@ export function executeRecoverOrder(
     ownEvents.push(event);
   }
   order.status = "executing";
-  return context.impulse >= 5
+  return context.impulse >= LAST_EXECUTION_IMPULSE
     ? complete(order, context)
     : result("progressed", ownEvents);
 }

@@ -3,8 +3,44 @@ import type { ContactState, GameState, Side } from "@/engine/types";
 export const opposingSide = (side: Side): Side =>
   side === "germany" ? "ussr" : "germany";
 
-function unique(ids: readonly string[]): string[] {
+function unique<T extends string>(ids: readonly T[]): T[] {
   return [...new Set(ids)].sort();
+}
+
+export interface SideSpecificContactInput {
+  id: string;
+  hexId: string;
+  type: ContactState["type"];
+  impulse: number;
+  detectedBy: Side[];
+  resolved: boolean;
+  attackerSide: Side;
+  defenderSide: Side;
+  attackerParticipantIds: readonly string[];
+  defenderParticipantIds: readonly string[];
+  attackerSupportIds?: readonly string[];
+  defenderSupportIds?: readonly string[];
+  attackerReserveIds?: readonly string[];
+  defenderReserveIds?: readonly string[];
+  createdAtImpulse?: number;
+  status?: ContactState["status"];
+  resolutionId?: string;
+  sourceOrderIds?: string[];
+}
+
+export function createSideSpecificContact(
+  input: SideSpecificContactInput,
+): ContactState {
+  return {
+    ...input,
+    detectedBy: unique(input.detectedBy),
+    attackerParticipantIds: unique(input.attackerParticipantIds),
+    defenderParticipantIds: unique(input.defenderParticipantIds),
+    attackerSupportIds: unique(input.attackerSupportIds ?? []),
+    defenderSupportIds: unique(input.defenderSupportIds ?? []),
+    attackerReserveIds: unique(input.attackerReserveIds ?? []),
+    defenderReserveIds: unique(input.defenderReserveIds ?? []),
+  };
 }
 
 function idsForSide(

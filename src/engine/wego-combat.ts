@@ -9,6 +9,7 @@ import type {
   Side,
   UnitState,
 } from "@/engine/types";
+import { LAST_EXECUTION_IMPULSE } from "@/engine/types";
 import { buildCombatModel } from "@/engine/combat";
 import {
   canStackInto,
@@ -635,7 +636,10 @@ export function resolveContact(
     for (const attackOrder of attackerOrders) {
       if (attackOrder.status === "executing") {
         attackOrder.status = "delayed";
-        attackOrder.actualStartImpulse = Math.min(5, state.impulse + 1);
+        attackOrder.actualStartImpulse = Math.min(
+          LAST_EXECUTION_IMPULSE,
+          state.impulse + 1,
+        );
         events.push({
           type: "ENEMY_ADVANCE_DELAYED",
           orderId: attackOrder.id,
@@ -673,7 +677,10 @@ export function resolveContact(
       });
     } else if (!attackerSucceeded) {
       order.status = "delayed";
-      order.actualStartImpulse = Math.min(5, state.impulse + 1);
+      order.actualStartImpulse = Math.min(
+        LAST_EXECUTION_IMPULSE,
+        state.impulse + 1,
+      );
       events.push({
         type: "ORDER_DELAYED",
         orderId: order.id,

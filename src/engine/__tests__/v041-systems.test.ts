@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type {
-  ContactState,
-  GameEvent,
-  GameState,
-  PlannedOrder,
+import {
+  LAST_EXECUTION_IMPULSE,
+  type ContactState,
+  type GameEvent,
+  type GameState,
+  type PlannedOrder,
 } from "@/engine/types";
 import { applyCommand } from "@/engine/engine";
 import { buildAfterActionReport } from "@/engine/after-action";
@@ -137,7 +138,7 @@ describe("v0.4.1 loss tolerance", () => {
           commandCost: 1,
           priority: 1,
           fromImpulse: 0,
-          toImpulse: 5,
+          toImpulse: LAST_EXECUTION_IMPULSE,
           maxUses: 1,
           uses: 0,
           status: "draft",
