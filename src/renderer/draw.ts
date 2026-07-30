@@ -11,6 +11,7 @@
 import type { GameState, HexState, UnitState, Side } from "@/engine/types";
 import { axialToPixel, edgeMidpoint, hexCorners, HEX_SIZE, neighbors, pixelToAxial, sharedEdge, type Axial } from "@/engine/hex";
 import { hiddenStackCount, MAX_VISIBLE_STACK_COUNTERS, orderRouteStyle, SUPPLY_MARK_SHAPES } from "@/renderer/presentation";
+import { normalizeRiverEdges } from "@/renderer/rivers";
 
 export interface Viewport {
   scale: number;
@@ -193,19 +194,17 @@ export function drawStaticLayer(ctx: CanvasRenderingContext2D, state: GameState,
   ctx.lineCap = "round";
   ctx.lineWidth = Math.max(1.4, 2.4 * detail);
   ctx.strokeStyle = C.river;
-  for (const id of ids) {
-    const h = state.hexes[id];
-    const p = axialToPixel(h.q, h.r, HEX_SIZE);
-    for (const e of h.riverEdges) {
-      const m = edgeMidpoint(h.q, h.r, e, HEX_SIZE);
-      // short segment across the edge (center -> midpoint) so adjacent hexes connect
-      const from = worldToScreen(p.x + (m.x - p.x) * 0.45, p.y + (m.y - p.y) * 0.45, vp);
-      const to = worldToScreen(m.x, m.y, vp);
-      ctx.beginPath();
-      ctx.moveTo(from.x, from.y);
-      ctx.lineTo(to.x, to.y);
-      ctx.stroke();
-    }
+  const visible = new Set(ids);
+  for (const river of normalizeRiverEdges(state.hexes)) {
+    if (!visible.has(river.hexId) && (!river.neighborHexId || !visible.has(river.neighborHexId))) continue;
+    const h = state.hexes[river.hexId];
+    const corners = hexCorners(h.q, h.r, HEX_SIZE);
+    const from = worldToScreen(corners[river.edge].x, corners[river.edge].y, vp);
+    const to = worldToScreen(corners[(river.edge + 1) % 6].x, corners[(river.edge + 1) % 6].y, vp);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
   }
 
   // 5. Roads & railways
