@@ -21,3 +21,9 @@ state removes hidden opponent order details. The UI opens the report
 automatically. Continuing from it performs supply recovery and end-of-day
 scoring, expires effects when appropriate, and opens the next morning report in
 one command.
+
+`turnStartedAtEventIndex` устанавливается при новой партии и на событии
+`TURN_ADVANCED`, сохраняется через command replay и тем самым воспроизводится
+после restore. День без `UNIT_LOST_STEP` имеет пустой `damagedThisTurn`.
+`understrengthUnits` исключает уничтоженные или отсутствующие части.
+Side-filtering скрывает вражеские потери, приказы, support и reserves.

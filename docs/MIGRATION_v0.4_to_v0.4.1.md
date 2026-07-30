@@ -8,6 +8,11 @@
 side-specific роли. Устаревшие `loss_threshold` reactions удаляются с
 предупреждением: их семантика перенесена в `order.lossTolerance`.
 
+`loss_threshold` существует только в `LegacyReactionCondition` внутри
+persistence boundary и отсутствует в active `ReactionCondition`. Повторная
+миграция уже очищенного save не создаёт warning повторно и не изменяет
+`lossTolerance` приказа.
+
 Неоднозначная поддержка старого snapshot не угадывается: `normalizeContactState`
 распределяет legacy IDs только по фактической стороне существующей части и
 удаляет пересечения ролей. Неизвестные unit IDs не попадают в поддержку.
@@ -16,3 +21,8 @@ side-specific роли. Устаревшие `loss_threshold` reactions удал
 
 Replay сохраняет исходный порядок оставшихся команд. Результат рассчитывается
 правилами v0.4.1, что явно отражается в migration warning.
+
+Legacy reserve triggers `friendly_retreat`, `meeting_engagement` и
+`objective_threatened` удаляются с перечисляющим warning. Если после очистки
+не осталось ни одного условия, используется `friendly_contact`; повторная
+миграция идемпотентна.

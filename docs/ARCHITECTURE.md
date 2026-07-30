@@ -8,6 +8,11 @@ WEGO execution is split into `order-execution.ts`, `wego-combat.ts`,
 `after-action.ts`, and `invariants.ts`. `engine.ts` remains the command boundary;
 all successful commands are checked by `validateStateInvariants`.
 
+`EXECUTION_IMPULSES` в `types.ts` является единственным источником числа,
+меток, последнего и ночного импульса. `createSideSpecificContact` — единая
+factory новых контактов; legacy arrays допустимы только на migration и
+normalization boundary.
+
 ## Границы модулей
 
 `src/engine` — единственный владелец правил. Он не зависит от React, DOM,
@@ -53,3 +58,7 @@ Canvas или базы данных. Команда проходит валид�
 схемы, движка и сценария, seed и журнал команд. Миграции выполняются до
 replay; повреждённое или несовместимое сохранение возвращает явную ошибку,
 а не частично загруженное состояние.
+
+`persistence.ts` содержит отдельные legacy v4 input types. Активные
+`ReactionCondition` и reserve trigger union не включают устаревшие значения.
+Migration удаляет их до replay и создаёт идемпотентные warnings.

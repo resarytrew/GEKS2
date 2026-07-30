@@ -9,6 +9,12 @@
 - Acceptance fixture uses representative existing formations as artillery and
   heavy-AT test assets; it is not a playable historical scenario.
 - Legacy `loss_threshold` reactions are removed with a migration warning.
+- Reserve triggers `friendly_retreat`, `meeting_engagement` and
+  `objective_threatened` are planned, not active v0.4.1 rules.
+- `npm audit --omit=dev` is clean. Thirteen findings remain in dev-only ESLint
+  and drizzle-kit dependency chains; see `DEPENDENCY_AUDIT_v0.4.1.md`.
+- Production smoke proves a local server only; no external deployment has been
+  created or verified.
 
 - Нет точной архивной карты театра: география, дороги, железные дороги,
   болота, реки, мосты и координаты частей реконструированы.

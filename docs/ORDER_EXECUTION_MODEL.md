@@ -37,3 +37,12 @@ exhausted.
 Orders can be delayed by command reliability, dependencies, route blockage,
 fuel, engineering interruption, or combat. Status changes and their reasons
 are emitted as events and appear in the execution panel and AAR.
+
+`validateFallbackRoute` проверяет минимум два гекса, общий текущий origin всей
+группы, существование ID, смежность каждой пары, отсутствие повторения одного
+гекса подряд и проходимость каждого ребра. Проверка выполняется при создании
+приказа/реакции и повторно непосредственно перед применением. До успешного
+завершения полной проверки ни одна часть и ни один ресурс не меняются.
+
+Все временные окна используют `EXECUTION_IMPULSE_COUNT` и
+`LAST_EXECUTION_IMPULSE`. Реальное число импульсов остаётся равным шести.

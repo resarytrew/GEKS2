@@ -9,20 +9,28 @@ npm run lint
 npm run test:v041
 npm test -- --run
 npm run build
+npm run smoke:production
 ```
 
-Regression suite содержит 46 пронумерованных тестов в трёх `v041-*` файлах.
-Полный acceptance day запускается через `runWegoV041AcceptanceDay` и включает
-planning обеих сторон, commit, шесть импульсов, meeting combat, side-specific
-support, heavy armor, HQ/engineer/bridge fixture, AAR и deterministic replay.
+Final regression suite содержит 84 теста в пяти `v041-*` файлах: исходные 46,
+28 hardening contracts и 10 full acceptance checks.
+
+Flow A выполняет planning/commit обеих сторон, configured impulse count,
+validated meeting engagement, side-specific support, расход боеприпасов, AAR и
+переход к следующему planning turn.
+
+Flow B проверяет validated bridge demolition, атомарный fallback, единственное
+введение резерва, HQ capture/advance, future CP, завершение дня, save,
+restore и deterministic replay hash.
 
 Локальный итоговый прогон:
 
-- v0.4.1 regression suite: 3 файла, 46/46 тестов, 6,48 с;
-- полный suite: 12 файлов, 228/228 тестов, 13,53 с;
-- acceptance day seed 77: 928 мс, 106 событий, 5 контактов,
-  5 combat resolutions;
-- TypeScript, ESLint и production build: успешно.
+- v0.4.1 suite: 5 файлов, 84/84 теста, 8,48 с;
+- полный suite: 14 файлов, 266/266 тестов, 16,80 с;
+- TypeScript, ESLint и production build: успешно;
+- production smoke: `/`, `/play`, `/api/health` — HTTP 200,
+  `engine=ready`, `persistence=local_only`; процесс завершён;
+- `npm audit --omit=dev`: 0 vulnerabilities.
 
 GitHub Actions для implementation commit `accd8ef`:
 
@@ -30,3 +38,6 @@ GitHub Actions для implementation commit `accd8ef`:
   успешно;
 - [pull request run 30486906594](https://github.com/resarytrew/GEKS2/actions/runs/30486906594) —
   успешно.
+
+Эти ссылки относятся к correctness commit до final hardening. Итоговые CI URLs
+будут записаны после публикации hardening commits.

@@ -23,8 +23,12 @@ production-сборки:
 
 ```powershell
 npm run build
-npm start
+npm run smoke:production
 ```
+
+Smoke script временно запускает production server на `127.0.0.1:3100`,
+проверяет `/`, `/play`, `/api/health` и обязательно завершает процесс. Это
+локальная и CI-проверка; production deployment этим не создаётся.
 
 PostgreSQL для одиночной локальной партии не нужен: сохранения записываются в
 `localStorage` браузера и проходят ту же миграцию/replay. `DATABASE_URL`
@@ -34,9 +38,11 @@ PostgreSQL для одиночной локальной партии не нуж
 
 ```powershell
 npm run typecheck
-npm test
 npm run lint
+npm run test:v041
+npm test -- --run
 npm run build
+npm run smoke:production
 ```
 
 Тесты покрывают транзакционное списание командных очков, общий статус рёбер,
@@ -80,6 +86,8 @@ npm run build
 `scenarioVersion: 0.4.1`. В v0.4.1 контакты разделены по сторонам,
 движение проходит через validated intents, а поддержка и резервы учитываются
 строго один раз.
+Активно поддерживаются только reserve triggers `friendly_contact` и
+`enemy_breakthrough`; остальные legacy-значения удаляются миграцией.
 
 ## Документация v0.4
 
@@ -89,3 +97,5 @@ npm run build
 - [After Action Report](docs/AFTER_ACTION_REPORT.md)
 - [Миграция v0.3 → v0.4](docs/MIGRATION_v0.3_to_v0.4.md)
 - [Проверка v0.4](docs/VERIFICATION_v0.4.md)
+- [Final hardening v0.4.1](docs/FINAL_HARDENING_v0.4.1.md)
+- [Dependency audit v0.4.1](docs/DEPENDENCY_AUDIT_v0.4.1.md)
