@@ -2,27 +2,25 @@
 
 import { useMemo, useState } from "react";
 import { useGame } from "@/store/gameStore";
-import { assessOrderReliability, IMPULSE_LABELS } from "@/engine/wego";
+import {
+  assessOrderReliability,
+  IMPULSE_LABELS,
+  LAST_EXECUTION_IMPULSE,
+} from "@/engine/wego";
+import { getEligibleSupportUnits } from "@/engine/support";
+import {
+  ORDER_RELIABILITY_LABELS,
+  ORDER_STATUS_LABELS,
+  ORDER_TYPE_LABELS,
+} from "@/engine/presentation";
 import { CARD_DEFS } from "@/scenarios/baltic-1941/scenario";
-import type {
-  PlannedOrder,
-  PlannedOrderType,
-  PlannedReaction,
-  ReactionCondition,
+import {
+  SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+  type PlannedOrder,
+  type PlannedOrderType,
+  type PlannedReaction,
+  type ReactionCondition,
 } from "@/engine/types";
-
-const ORDER_LABELS: Record<PlannedOrderType, string> = {
-  march: "Марш",
-  advance: "Наступление",
-  prepared_attack: "Подготовленная атака",
-  defend: "Оборона",
-  delay: "Сдерживание",
-  withdraw: "Организованный отход",
-  reserve: "Резерв",
-  recover: "Восстановление",
-  prepare_demolition: "Подготовить подрыв",
-  build_pontoon: "Навести понтон",
-};
 
 const ROUTE_ORDERS = new Set<PlannedOrderType>([
   "march",
@@ -46,9 +44,8 @@ export default function OrderPlanningPanel() {
   const [lossTolerance, setLossTolerance] =
     useState<PlannedOrder["lossTolerance"]>("normal");
   const [targetHexId, setTargetHexId] = useState("");
-  const [fallbackHexId, setFallbackHexId] = useState("");
   const [bridgeEdge, setBridgeEdge] = useState(0);
-  const [waitFor, setWaitFor] = useState("");
+  const [waitFor, setWaitFor] = useState<string[]>([]);
   const [supportIds, setSupportIds] = useState<string[]>([]);
   const [cardIds, setCardIds] = useState<string[]>([]);
 
@@ -63,18 +60,18 @@ export default function OrderPlanningPanel() {
     "";
   const supportCandidates = useMemo(() => {
     if (!state || !side) return [];
-    return Object.values(state.units)
-      .filter(
-        (unit) =>
-          unit.side === side &&
-          !unit.eliminated &&
-          !selectedUnitIds.includes(unit.id) &&
-          (unit.unitType === "artillery" ||
-            unit.unitType === "air" ||
-            unit.traits.includes("heavy_at")),
-      )
-      .slice(0, 8);
-  }, [selectedUnitIds, side, state]);
+    if (!derivedTarget) return [];
+    return getEligibleSupportUnits(
+      state,
+      side,
+      derivedTarget,
+      undefined,
+      startImpulse,
+    )
+      .filter((entry) => entry.eligible)
+      .map((entry) => state.units[entry.unitId])
+      .filter((unit) => !!unit && !selectedUnitIds.includes(unit.id));
+  }, [derivedTarget, selectedUnitIds, side, startImpulse, state]);
 
   if (!state || state.phase !== "planning" || !side || !plan) return null;
 
@@ -95,14 +92,8 @@ export default function OrderPlanningPanel() {
           contactPolicy,
           lossTolerance,
           supportIds,
-          waitForEntityIds: waitFor
-            .split(",")
-            .map((value) => value.trim())
-            .filter(Boolean),
+          waitForEntityIds: [...waitFor],
           cardIds,
-          fallbackHexId: fallbackHexId || undefined,
-          fallbackRoute:
-            fallbackHexId && lead ? [lead.hexId, fallbackHexId] : undefined,
           bridgeHexId:
             orderType === "prepare_demolition" || orderType === "build_pontoon"
               ? derivedTarget || lead.hexId
@@ -115,9 +106,11 @@ export default function OrderPlanningPanel() {
             orderType === "reserve"
               ? {
                   triggerRadius: 2,
-                  triggerConditions: ["friendly_contact", "enemy_breakthrough"],
+                  triggerConditions: [
+                    ...SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+                  ],
                   targetPriority: derivedTarget ? [derivedTarget] : [],
-                  maxCommitImpulse: 5,
+                  maxCommitImpulse: LAST_EXECUTION_IMPULSE,
                 }
               : undefined,
           status: "draft",
@@ -131,9 +124,8 @@ export default function OrderPlanningPanel() {
       clearSelection();
       setSupportIds([]);
       setCardIds([]);
-      setWaitFor("");
+      setWaitFor([]);
       setTargetHexId("");
-      setFallbackHexId("");
     }
   };
 
@@ -167,7 +159,7 @@ export default function OrderPlanningPanel() {
                 }
                 className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1.5 text-[11px] text-staff-ink"
               >
-                {Object.entries(ORDER_LABELS).map(([value, label]) => (
+                {Object.entries(ORDER_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>
                     {label}
                   </option>
@@ -234,18 +226,6 @@ export default function OrderPlanningPanel() {
               onChange={setTargetHexId}
               placeholder="выберите на карте"
             />
-            <TextField
-              label="Запасной рубеж"
-              value={fallbackHexId}
-              onChange={setFallbackHexId}
-              placeholder="q_r"
-            />
-            <TextField
-              label="Ожидать части"
-              value={waitFor}
-              onChange={setWaitFor}
-              placeholder="id, id"
-            />
             {(orderType === "prepare_demolition" ||
               orderType === "build_pontoon") && (
               <label className="text-[10px] text-staff-mute">
@@ -258,6 +238,9 @@ export default function OrderPlanningPanel() {
                   onChange={(event) => setBridgeEdge(Number(event.target.value))}
                   className="mt-1 w-full rounded border border-staff-edge bg-staff-void px-2 py-1 text-[11px] text-staff-ink"
                 />
+                <span className="mt-1 block text-[8px] text-staff-mute">
+                  0 В · 1 СВ · 2 ЮВ · 3 З · 4 ЮЗ · 5 СЗ
+                </span>
               </label>
             )}
           </div>
@@ -272,6 +255,30 @@ export default function OrderPlanningPanel() {
               selected={supportIds}
               onToggle={(id) =>
                 setSupportIds((current) =>
+                  current.includes(id)
+                    ? current.filter((value) => value !== id)
+                    : [...current, id],
+                )
+              }
+            />
+          )}
+          {selectedUnitIds.length > 0 && (
+            <ChoiceRow
+              title="Ожидать соединения"
+              choices={Object.values(state.units)
+                .filter(
+                  (unit) =>
+                    unit.side === side &&
+                    !unit.eliminated &&
+                    !selectedUnitIds.includes(unit.id),
+                )
+                .map((unit) => ({
+                  id: unit.id,
+                  label: unit.shortName,
+                }))}
+              selected={waitFor}
+              onToggle={(id) =>
+                setWaitFor((current) =>
                   current.includes(id)
                     ? current.filter((value) => value !== id)
                     : [...current, id],
@@ -310,7 +317,10 @@ export default function OrderPlanningPanel() {
               {reliability && (
                 <div className="mt-0.5">
                   Надёжность:{" "}
-                  <span className="text-staff-gold">{reliability.level}</span> ·
+                  <span className="text-staff-gold">
+                    {ORDER_RELIABILITY_LABELS[reliability.level]}
+                  </span>{" "}
+                  ·
                   задержка {reliability.delay.minimum}–{reliability.delay.maximum}
                 </div>
               )}
@@ -338,10 +348,12 @@ export default function OrderPlanningPanel() {
               className="flex items-center gap-2 rounded bg-staff-void/55 px-2 py-1.5 text-[10px]"
             >
               <span className="min-w-0 flex-1 truncate text-staff-ink-dim">
-                {ORDER_LABELS[order.orderType]} · {order.entityIds.length} · I
+                {ORDER_TYPE_LABELS[order.orderType]} · {order.entityIds.length} · I
                 {order.startImpulse + 1}
               </span>
-              <span className="text-staff-mute">{order.status}</span>
+              <span className="text-staff-mute">
+                {ORDER_STATUS_LABELS[order.status]}
+              </span>
               {!plan.committed && (
                 <button
                   onClick={() =>
@@ -390,8 +402,6 @@ function ReactionTemplates({
   const templates: Array<{ condition: ReactionCondition; label: string }> = [
     { condition: "enemy_approaches_bridge", label: "Подрыв моста" },
     { condition: "encirclement_threat", label: "Отход от окружения" },
-    { condition: "loss_threshold", label: "Прервать атаку" },
-    { condition: "route_blocked", label: "Обход блокировки" },
   ];
   return (
     <details className="mt-3 border-t border-staff-edge pt-2">
@@ -417,16 +427,10 @@ function ReactionTemplates({
                 commandCost: 1,
                 priority: 2,
                 fromImpulse: 0,
-                toImpulse: 5,
+                toImpulse: LAST_EXECUTION_IMPULSE,
                 maxUses: 1,
                 uses: 0,
                 status: "draft",
-                fallbackRoute:
-                  targetHexId && entityIds[0]
-                    ? [state.units[entityIds[0]].hexId, targetHexId]
-                    : undefined,
-                lossThreshold:
-                  template.condition === "loss_threshold" ? 1 : undefined,
               };
               dispatch({
                 type: "UPSERT_REACTION",

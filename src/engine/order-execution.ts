@@ -7,12 +7,18 @@ import type {
   PlannedOrderType,
   Side,
   UnitState,
+  ValidatedMovementIntent,
+} from "@/engine/types";
+import {
+  LAST_EXECUTION_IMPULSE,
+  isNightImpulse,
 } from "@/engine/types";
 import {
   canStackInto,
   commandInfo,
   edgeCost,
   isInEnemyZOC,
+  stackLimitOf,
 } from "@/engine/rules";
 import { distance, parseKey, sharedEdge } from "@/engine/hex";
 import {
@@ -22,6 +28,7 @@ import {
   sharedEdgeKey,
   updateSharedEdge,
 } from "@/engine/edges";
+import { createSideSpecificContact } from "@/engine/contact";
 
 export interface ImpulseExecutionContext {
   impulse: number;
@@ -176,7 +183,7 @@ export function movementBudgetForOrder(
         readinessFactor(unit),
     ),
   );
-  const night = state.impulse === 5 ? 0.7 : 1;
+  const night = isNightImpulse(state.impulse) ? 0.7 : 1;
   const carry = order.remainingMovementBudget ?? 0;
   const available = Math.max(
     0,
@@ -194,6 +201,232 @@ function fuelCostForEdge(
   const classCost = unit.movementClass === "tracked" ? 3 : 2;
   const tempo = orderType === "march" ? 1.15 : orderType === "withdraw" ? 1.1 : 1;
   return Math.max(1, Math.ceil(movementCost * classCost * tempo));
+}
+
+export interface MovementStepEvaluationOptions {
+  fromHexId?: string;
+  toHexId?: string;
+  availableMovement?: number;
+  allowEnemyOccupiedTarget?: boolean;
+}
+
+export type FallbackRouteErrorCode =
+  | "FALLBACK_ROUTE_START_MISMATCH"
+  | "FALLBACK_ROUTE_NOT_CONTIGUOUS"
+  | "FALLBACK_ROUTE_INVALID_HEX"
+  | "FALLBACK_ROUTE_BLOCKED";
+
+export type FallbackRouteValidation =
+  | { valid: true }
+  | {
+      valid: false;
+      code: FallbackRouteErrorCode;
+      message: string;
+    };
+
+export function validateFallbackRoute(
+  state: GameState,
+  side: Side,
+  entityIds: readonly string[],
+  route: readonly string[] | undefined,
+): FallbackRouteValidation {
+  if (
+    !route ||
+    route.length < 2 ||
+    route.some((hexId) => !hexId || !state.hexes[hexId])
+  ) {
+    return {
+      valid: false,
+      code: "FALLBACK_ROUTE_INVALID_HEX",
+      message:
+        "Запасной маршрут должен содержать минимум два существующих гекса.",
+    };
+  }
+  const units = entityIds.map((id) => state.units[id]);
+  if (
+    entityIds.length === 0 ||
+    units.some(
+      (unit) =>
+        !unit ||
+        unit.eliminated ||
+        unit.side !== side ||
+        unit.hexId !== route[0],
+    )
+  ) {
+    return {
+      valid: false,
+      code: "FALLBACK_ROUTE_START_MISMATCH",
+      message:
+        "Запасной маршрут должен начинаться в общем текущем гексе всех назначенных частей.",
+    };
+  }
+  for (let index = 1; index < route.length; index++) {
+    const fromHexId = route[index - 1];
+    const toHexId = route[index];
+    if (
+      fromHexId === toHexId ||
+      sharedEdge(parseKey(fromHexId), parseKey(toHexId)) == null
+    ) {
+      return {
+        valid: false,
+        code: "FALLBACK_ROUTE_NOT_CONTIGUOUS",
+        message:
+          "Запасной маршрут содержит повторяющиеся подряд или несмежные гексы.",
+      };
+    }
+    if (
+      (units as UnitState[]).some(
+        (unit) =>
+          !Number.isFinite(edgeCost(state, unit, fromHexId, toHexId)),
+      )
+    ) {
+      return {
+        valid: false,
+        code: "FALLBACK_ROUTE_BLOCKED",
+        message:
+          "Запасной маршрут пересекает непроходимое ребро или занятый противником гекс.",
+      };
+    }
+  }
+  return { valid: true };
+}
+
+export function evaluateMovementStep(
+  state: GameState,
+  order: PlannedOrder,
+  options: MovementStepEvaluationOptions = {},
+): ValidatedMovementIntent {
+  const route = order.route ?? [];
+  const lead = state.units[order.entityIds[0]];
+  const fromHexId = options.fromHexId ?? lead?.hexId ?? route[0] ?? "";
+  const routeIndex = Math.max(0, route.indexOf(fromHexId));
+  const toHexId = options.toHexId ?? route[routeIndex + 1] ?? "";
+  const base = {
+    orderId: order.id,
+    side: order.side,
+    entityIds: [...order.entityIds],
+    fromHexId,
+    toHexId,
+  };
+  const block = (blockingReason: string): ValidatedMovementIntent => ({
+    ...base,
+    movementCost: Number.POSITIVE_INFINITY,
+    fuelCosts: {},
+    canEnter: false,
+    stopAfterEntry: false,
+    blockingReason,
+  });
+  if (
+    order.orderType !== "march" &&
+    order.orderType !== "advance" &&
+    order.orderType !== "withdraw"
+  ) {
+    return block("Приказ не является маршрутным.");
+  }
+  if (!fromHexId || !toHexId || !state.hexes[fromHexId] || !state.hexes[toHexId]) {
+    return block("Следующий участок маршрута отсутствует.");
+  }
+  if (
+    order.entityIds.length === 0 ||
+    new Set(order.entityIds).size !== order.entityIds.length
+  ) {
+    return block("Маршрутная группа содержит повторяющиеся или отсутствующие части.");
+  }
+  const units = order.entityIds.map((id) => state.units[id]);
+  if (
+    units.some(
+      (unit) =>
+        !unit ||
+        unit.eliminated ||
+        unit.side !== order.side ||
+        unit.hexId !== fromHexId,
+    )
+  ) {
+    return block(
+      "Все соединения маршрутного приказа должны находиться в одном исходном гексе.",
+    );
+  }
+  const validUnits = units as UnitState[];
+  if (sharedEdge(parseKey(fromHexId), parseKey(toHexId)) == null) {
+    return block("Гексы маршрута не смежны.");
+  }
+  const movementCost = Math.max(
+    ...validUnits.map((unit) =>
+      edgeCost(state, unit, fromHexId, toHexId, {
+        ignoreEnemyOccupation: options.allowEnemyOccupiedTarget,
+      }),
+    ),
+  );
+  if (!Number.isFinite(movementCost)) {
+    return block("Местность или состояние переправы блокирует маршрут.");
+  }
+  const availableMovement =
+    options.availableMovement ?? movementBudgetForOrder(state, order).remaining;
+  const fuelCosts = Object.fromEntries(
+    validUnits.map((unit) => [
+      unit.id,
+      fuelCostForEdge(unit, movementCost, order.orderType),
+    ]),
+  );
+  if (movementCost > availableMovement + 0.001) {
+    return {
+      ...base,
+      movementCost,
+      fuelCosts,
+      canEnter: false,
+      stopAfterEntry: false,
+      blockingReason: "Недостаточно накопленного бюджета движения.",
+    };
+  }
+  if (validUnits.some((unit) => fuelCosts[unit.id] > unit.fuel)) {
+    return {
+      ...base,
+      movementCost,
+      fuelCosts,
+      canEnter: false,
+      stopAfterEntry: false,
+      blockingReason: "Недостаточно топлива для следующего участка.",
+    };
+  }
+  const target = state.hexes[toHexId];
+  const enemyPresent = target.stackUnitIds.some(
+    (id) => state.units[id]?.side === enemyOf(order.side),
+  );
+  let stackingAllowed = canStackInto(state, order.entityIds, toHexId);
+  if (enemyPresent && options.allowEnemyOccupiedTarget) {
+    const movingPoints = validUnits.reduce(
+      (sum, unit) => sum + unit.stackingCost,
+      0,
+    );
+    const friendlyPoints = target.stackUnitIds
+      .filter(
+        (id) =>
+          !order.entityIds.includes(id) &&
+          state.units[id]?.side === order.side,
+      )
+      .reduce(
+        (sum, id) => sum + (state.units[id]?.stackingCost ?? 0),
+        0,
+      );
+    stackingAllowed = movingPoints + friendlyPoints <= stackLimitOf(target);
+  }
+  if (!stackingAllowed) {
+    return {
+      ...base,
+      movementCost,
+      fuelCosts,
+      canEnter: false,
+      stopAfterEntry: false,
+      blockingReason: "Стэкинг блокирует вход в гекс.",
+    };
+  }
+  return {
+    ...base,
+    movementCost,
+    fuelCosts,
+    canEnter: true,
+    stopAfterEntry: isInEnemyZOC(state, toHexId, order.side),
+  };
 }
 
 function claimAfterMovement(
@@ -249,26 +482,34 @@ function createContact(
       state.units[id]?.side === enemyOf(order.side) &&
       !state.units[id]?.eliminated,
   );
-  const entityIds = [...new Set([...order.entityIds, ...enemyIds])].sort();
+  const attackerParticipantIds = [...new Set(order.entityIds)].sort();
+  const defenderParticipantIds = [...new Set(enemyIds)].sort();
+  const entityIds = [
+    ...attackerParticipantIds,
+    ...defenderParticipantIds,
+  ].sort();
   const id = `contact:${state.turn}:${context.impulse}:${type}:${entityIds.join(":")}`;
   const existing = state.contacts.find((contact) => contact.id === id);
   if (existing) return existing;
-  const contact: ContactState = {
+  const contact = createSideSpecificContact({
     id,
     type,
     hexId,
     attackerSide: order.side,
-    entityIds,
-    participantIds: entityIds,
-    supportIds: [...(order.supportIds ?? [])],
-    reserveIds: [],
+    defenderSide: enemyOf(order.side),
+    attackerParticipantIds,
+    defenderParticipantIds,
+    attackerSupportIds: [...new Set(order.supportIds ?? [])].sort(),
+    defenderSupportIds: [],
+    attackerReserveIds: [],
+    defenderReserveIds: [],
     sourceOrderIds: [order.id],
     impulse: context.impulse,
     createdAtImpulse: context.impulse,
     detectedBy: ["germany", "ussr"],
     status: "ready",
     resolved: false,
-  };
+  });
   state.contacts.push(contact);
   context.createdContactIds.push(contact.id);
   context.events.push({
@@ -280,7 +521,7 @@ function createContact(
   return contact;
 }
 
-function triggerRouteBlockedReaction(
+export function triggerRouteBlockedReaction(
   state: GameState,
   order: PlannedOrder,
   blockedHexId: string,
@@ -303,7 +544,21 @@ function triggerRouteBlockedReaction(
         right.priority - left.priority || left.id.localeCompare(right.id),
     )[0];
   const lead = unitsForOrder(state, order)[0];
-  if (!reaction || !lead || reaction.fallbackRoute![0] !== lead.hexId) {
+  if (!reaction || !lead) {
+    return undefined;
+  }
+  const fallbackValidation = validateFallbackRoute(
+    state,
+    order.side,
+    order.entityIds,
+    reaction.fallbackRoute,
+  );
+  if (!fallbackValidation.valid) {
+    context.events.push({
+      type: "REACTION_FAILED",
+      reactionId: reaction.id,
+      reason: `${fallbackValidation.code}: ${fallbackValidation.message}`,
+    });
     return undefined;
   }
   reaction.uses += 1;
@@ -312,7 +567,10 @@ function triggerRouteBlockedReaction(
   order.route = [...reaction.fallbackRoute!];
   order.progressIndex = 0;
   order.status = "delayed";
-  order.actualStartImpulse = Math.min(5, context.impulse + 1);
+  order.actualStartImpulse = Math.min(
+    LAST_EXECUTION_IMPULSE,
+    context.impulse + 1,
+  );
   const triggered: GameEvent = {
     type: "REACTION_TRIGGERED",
     reactionId: reaction.id,
@@ -351,6 +609,18 @@ function executeRouteOrder(
   if (!route || route.length < 2 || units.length === 0) {
     return fail(order, context, "Для движения отсутствует допустимый маршрут.");
   }
+  const expectedProgress = order.progressIndex ?? 0;
+  if (
+    units.length !== order.entityIds.length ||
+    new Set(units.map((unit) => unit.hexId)).size !== 1 ||
+    units.some((unit) => unit.hexId !== route[expectedProgress])
+  ) {
+    return fail(
+      order,
+      context,
+      "Все соединения маршрутного приказа должны находиться в одном исходном гексе.",
+    );
+  }
   if (
     units.some(
       (unit) =>
@@ -387,6 +657,41 @@ function executeRouteOrder(
   while (progress < route.length - 1) {
     const from = route[progress];
     const to = route[progress + 1];
+    const step = evaluateMovementStep(state, order, {
+      fromHexId: from,
+      toHexId: to,
+      availableMovement: budget.remaining,
+      allowEnemyOccupiedTarget: true,
+    });
+    if (!step.canEnter) {
+      if (
+        step.blockingReason ===
+        "Недостаточно накопленного бюджета движения."
+      ) {
+        break;
+      }
+      const rerouted = triggerRouteBlockedReaction(
+        state,
+        order,
+        to,
+        context,
+      );
+      if (rerouted) return rerouted;
+      const event: GameEvent = {
+        type: "ORDER_BLOCKED",
+        orderId: order.id,
+        hexId: to,
+        reason: step.blockingReason ?? "Маршрут заблокирован.",
+      };
+      context.events.push(event);
+      order.status = order.contactPolicy === "avoid" ? "failed" : "delayed";
+      order.failureReason = event.reason;
+      return result("blocked", [...ownEvents, event], {
+        consumedMovement: budget.spent,
+        consumedFuel,
+        reason: event.reason,
+      });
+    }
     const enemyOnTarget = state.hexes[to]?.stackUnitIds.some(
       (id) => state.units[id]?.side === enemyOf(order.side),
     );
@@ -431,55 +736,11 @@ function executeRouteOrder(
         reason: event.reason,
       });
     }
-    const stepCost = Math.max(
-      ...units.map((unit) => edgeCost(state, unit, from, to)),
-    );
-    if (!Number.isFinite(stepCost) || !canStackInto(state, order.entityIds, to)) {
-      const rerouted = triggerRouteBlockedReaction(
-        state,
-        order,
-        to,
-        context,
-      );
-      if (rerouted) return rerouted;
-      const event: GameEvent = {
-        type: "ORDER_BLOCKED",
-        orderId: order.id,
-        hexId: to,
-        reason: "Местность, переправа или стэкинг блокируют маршрут.",
-      };
-      context.events.push(event);
-      order.status = order.contactPolicy === "avoid" ? "failed" : "delayed";
-      order.failureReason = event.reason;
-      return result("blocked", [...ownEvents, event], {
-        consumedMovement: budget.spent,
-        consumedFuel,
-        reason: event.reason,
-      });
-    }
-    if (stepCost > budget.remaining + 0.001) break;
+    const stepCost = step.movementCost;
     const fuelCosts = units.map((unit) => ({
       unit,
-      amount: fuelCostForEdge(unit, stepCost, order.orderType),
+      amount: step.fuelCosts[unit.id] ?? 0,
     }));
-    if (fuelCosts.some(({ unit, amount }) => amount > unit.fuel)) {
-      for (const { unit } of fuelCosts) {
-        if (unit.fuel < 15) {
-          const critical: GameEvent = {
-            type: "FUEL_CRITICAL",
-            unitId: unit.id,
-          };
-          context.events.push(critical);
-          ownEvents.push(critical);
-        }
-      }
-      order.status = "delayed";
-      return result("delayed", ownEvents, {
-        consumedMovement: budget.spent,
-        consumedFuel,
-        reason: "Топлива недостаточно для следующего участка.",
-      });
-    }
     for (const { unit, amount } of fuelCosts) {
       const origin = unit.hexId;
       moveToHex(state, unit, to, context.impulse);
@@ -613,7 +874,7 @@ export function executePreparedAttackOrder(
     const mustWait = notArrived.some((unit) =>
       order.waitForEntityIds?.includes(unit.id),
     );
-    if (mustWait && context.impulse < 5) {
+    if (mustWait && context.impulse < LAST_EXECUTION_IMPULSE) {
       order.status = "delayed";
       const event: GameEvent = {
         type: "ORDER_DELAYED",
@@ -715,40 +976,99 @@ export function executeReserveOrder(
     triggerRadius: 2,
     triggerConditions: ["friendly_contact" as const],
     targetPriority: [],
-    maxCommitImpulse: 5,
+    maxCommitImpulse: LAST_EXECUTION_IMPULSE,
   };
-  if (context.impulse > data.maxCommitImpulse) return complete(order, context);
+  const targetRank = (hexId: string): number => {
+    const index = data.targetPriority.indexOf(hexId);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  };
+  if (context.impulse > data.maxCommitImpulse) {
+    const event: GameEvent = {
+      type: "RESERVE_NOT_COMMITTED",
+      orderId: order.id,
+    };
+    context.events.push(event);
+    const completion = complete(order, context);
+    return result("completed", [event, ...completion.events]);
+  }
+  const matchesTrigger = (contact: ContactState): boolean => {
+    const friendlyParticipants =
+      contact.attackerSide === order.side
+        ? contact.attackerParticipantIds
+        : contact.defenderParticipantIds;
+    const friendlyContact =
+      data.triggerConditions.includes("friendly_contact") &&
+      friendlyParticipants.length > 0;
+    const breakthrough =
+      data.triggerConditions.includes("enemy_breakthrough") &&
+      (contact.type === "PURSUIT" ||
+        state.eventLog.some(
+          (event) =>
+            event.type === "ADVANCE_AFTER_COMBAT" &&
+            event.contactId === contact.id,
+        ));
+    return friendlyContact || breakthrough;
+  };
   const candidate = state.contacts
     .filter(
       (contact) =>
         !contact.resolved &&
         contact.status !== "cancelled" &&
         contact.detectedBy.includes(order.side) &&
-        contact.entityIds.some(
-          (id) => state.units[id]?.side === order.side,
-        ) &&
+        matchesTrigger(contact) &&
         units.some(
           (unit) =>
+            unit.commandState !== "disorganized" &&
+            unit.commandState !== "out_of_command" &&
             distance(parseKey(unit.hexId), parseKey(contact.hexId)) <=
             data.triggerRadius,
         ),
     )
     .sort(
       (left, right) =>
-        data.targetPriority.indexOf(left.hexId) -
-          data.targetPriority.indexOf(right.hexId) ||
+        targetRank(left.hexId) - targetRank(right.hexId) ||
+        Math.min(
+          ...units.map((unit) =>
+            distance(parseKey(unit.hexId), parseKey(left.hexId)),
+          ),
+        ) -
+          Math.min(
+            ...units.map((unit) =>
+              distance(parseKey(unit.hexId), parseKey(right.hexId)),
+            ),
+          ) ||
+        right.defenderParticipantIds.length -
+          left.defenderParticipantIds.length ||
         left.id.localeCompare(right.id),
     )[0];
   if (!candidate) {
+    if (context.impulse >= data.maxCommitImpulse) {
+      const event: GameEvent = {
+        type: "RESERVE_NOT_COMMITTED",
+        orderId: order.id,
+      };
+      context.events.push(event);
+      const completion = complete(order, context);
+      return result("completed", [event, ...completion.events]);
+    }
     order.status = "executing";
     return result("delayed", []);
   }
-  candidate.reserveIds = [
-    ...new Set([...(candidate.reserveIds ?? []), ...order.entityIds]),
-  ];
-  candidate.entityIds = [
-    ...new Set([...candidate.entityIds, ...order.entityIds]),
-  ].sort();
+  if (candidate.attackerSide === order.side) {
+    candidate.attackerParticipantIds = [
+      ...new Set([
+        ...candidate.attackerParticipantIds,
+        ...order.entityIds,
+      ]),
+    ].sort();
+  } else {
+    candidate.defenderParticipantIds = [
+      ...new Set([
+        ...candidate.defenderParticipantIds,
+        ...order.entityIds,
+      ]),
+    ].sort();
+  }
   order.status = "completed";
   order.completedAtImpulse = context.impulse;
   const event: GameEvent = {
@@ -794,7 +1114,7 @@ export function executeRecoverOrder(
     ownEvents.push(event);
   }
   order.status = "executing";
-  return context.impulse >= 5
+  return context.impulse >= LAST_EXECUTION_IMPULSE
     ? complete(order, context)
     : result("progressed", ownEvents);
 }

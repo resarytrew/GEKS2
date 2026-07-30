@@ -1,4 +1,8 @@
-# Order execution model v0.4
+# Order execution model v0.4.1
+
+Маршрутный шаг транзакционен: весь стек проверяется на общий исходный гекс,
+ребро, бюджет, топливо и stacking до перемещения первой части. Источником
+расчёта является `evaluateMovementStep`.
 
 The normal game mode is a deterministic six-impulse WEGO day. Both sides create
 hidden `PlannedOrder` records and pay command costs when committing their plans.
@@ -33,3 +37,12 @@ exhausted.
 Orders can be delayed by command reliability, dependencies, route blockage,
 fuel, engineering interruption, or combat. Status changes and their reasons
 are emitted as events and appear in the execution panel and AAR.
+
+`validateFallbackRoute` проверяет минимум два гекса, общий текущий origin всей
+группы, существование ID, смежность каждой пары, отсутствие повторения одного
+гекса подряд и проходимость каждого ребра. Проверка выполняется при создании
+приказа/реакции и повторно непосредственно перед применением. До успешного
+завершения полной проверки ни одна часть и ни один ресурс не меняются.
+
+Все временные окна используют `EXECUTION_IMPULSE_COUNT` и
+`LAST_EXECUTION_IMPULSE`. Реальное число импульсов остаётся равным шести.

@@ -1,4 +1,8 @@
-import type { GameState } from "@/engine/types";
+import {
+  SUPPORTED_REACTION_CONDITIONS,
+  SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+  type GameState,
+} from "@/engine/types";
 import { directionForEdge, getSharedEdge } from "@/engine/edges";
 
 export interface StateInvariantViolation {
@@ -143,6 +147,118 @@ export function validateStateInvariants(
   }
 
   for (const contact of state.contacts) {
+    const attackerSide = contact.attackerSide;
+    const defenderSide = contact.defenderSide;
+    const attackerParticipants = contact.attackerParticipantIds ?? [];
+    const defenderParticipants = contact.defenderParticipantIds ?? [];
+    const attackerSupport = contact.attackerSupportIds ?? [];
+    const defenderSupport = contact.defenderSupportIds ?? [];
+    const attackerReserve = contact.attackerReserveIds ?? [];
+    const defenderReserve = contact.defenderReserveIds ?? [];
+    if (!attackerSide) {
+      violations.push({
+        code: "CONTACT_MISSING_ATTACKER_SIDE",
+        message: `${contact.id} has no attacker side.`,
+      });
+    }
+    if (!defenderSide) {
+      violations.push({
+        code: "CONTACT_MISSING_DEFENDER_SIDE",
+        message: `${contact.id} has no defender side.`,
+      });
+    }
+    if (
+      attackerSide &&
+      defenderSide &&
+      attackerSide === defenderSide
+    ) {
+      violations.push({
+        code: "CONTACT_SAME_SIDE",
+        message: `${contact.id} assigns both contact roles to ${attackerSide}.`,
+      });
+    }
+    const participantIds = [
+      ...attackerParticipants,
+      ...defenderParticipants,
+    ];
+    if (
+      attackerParticipants.some(
+        (id) => state.units[id]?.side !== attackerSide,
+      ) ||
+      defenderParticipants.some(
+        (id) => state.units[id]?.side !== defenderSide,
+      )
+    ) {
+      violations.push({
+        code: "CONTACT_PARTICIPANT_WRONG_SIDE",
+        message: `${contact.id} contains a participant assigned to the wrong side.`,
+        entityIds: participantIds,
+      });
+    }
+    if (new Set(participantIds).size !== participantIds.length) {
+      violations.push({
+        code: "CONTACT_DUPLICATE_PARTICIPANT",
+        message: `${contact.id} contains a duplicate combat participant.`,
+        entityIds: participantIds,
+      });
+    }
+    if (
+      attackerParticipants.some((id) => defenderParticipants.includes(id))
+    ) {
+      violations.push({
+        code: "CONTACT_CROSS_SIDE_PARTICIPANT",
+        message: `${contact.id} assigns one unit to both sides.`,
+        entityIds: participantIds,
+      });
+    }
+    const supportIds = [...attackerSupport, ...defenderSupport];
+    if (supportIds.some((id) => participantIds.includes(id))) {
+      violations.push({
+        code: "CONTACT_SUPPORT_DUPLICATES_PARTICIPANT",
+        message: `${contact.id} uses a participant as support.`,
+        entityIds: supportIds.filter((id) => participantIds.includes(id)),
+      });
+    }
+    if (
+      attackerSupport.some((id) => state.units[id]?.side !== attackerSide) ||
+      defenderSupport.some((id) => state.units[id]?.side !== defenderSide)
+    ) {
+      violations.push({
+        code: "CONTACT_SUPPORT_WRONG_SIDE",
+        message: `${contact.id} contains support assigned to the wrong side.`,
+        entityIds: supportIds,
+      });
+    }
+    const nonReserveRoles = new Set([...participantIds, ...supportIds]);
+    const reserveIds = [...attackerReserve, ...defenderReserve];
+    if (
+      attackerReserve.some((id) => state.units[id]?.side !== attackerSide) ||
+      defenderReserve.some((id) => state.units[id]?.side !== defenderSide)
+    ) {
+      violations.push({
+        code: "CONTACT_RESERVE_WRONG_SIDE",
+        message: `${contact.id} contains reserve assigned to the wrong side.`,
+        entityIds: reserveIds,
+      });
+    }
+    if (
+      reserveIds.some((id) => nonReserveRoles.has(id)) ||
+      new Set(reserveIds).size !== reserveIds.length
+    ) {
+      violations.push({
+        code: "CONTACT_RESERVE_DUPLICATE_ROLE",
+        message: `${contact.id} assigns a reserve to multiple roles.`,
+        entityIds: reserveIds,
+      });
+    }
+    const allRoleIds = [...participantIds, ...supportIds, ...reserveIds];
+    if (new Set(allRoleIds).size !== allRoleIds.length) {
+      violations.push({
+        code: "CONTACT_DUPLICATE_ROLE",
+        message: `${contact.id} assigns at least one unit to multiple roles.`,
+        entityIds: allRoleIds,
+      });
+    }
     if (
       (contact.resolved || contact.status === "resolved") &&
       !contact.resolutionId
@@ -151,6 +267,77 @@ export function validateStateInvariants(
         code: "RESOLVED_CONTACT_WITHOUT_RESOLUTION",
         message: `${contact.id} is resolved without a resolution id.`,
       });
+    }
+  }
+
+  const supportUsageKeys = new Set<string>();
+  const exactSupportUsageKeys = new Set<string>();
+  for (const usage of state.supportUsage) {
+    const unit = state.units[usage.unitId];
+    const key = `${usage.unitId}:${usage.impulse}`;
+    const exactKey = `${key}:${usage.contactId}`;
+    if (!unit) {
+      violations.push({
+        code: "SUPPORT_USAGE_UNKNOWN_UNIT",
+        message: `${usage.unitId} is referenced by support usage but does not exist.`,
+        entityIds: [usage.unitId],
+      });
+    }
+    if (!state.contacts.some((contact) => contact.id === usage.contactId)) {
+      violations.push({
+        code: "SUPPORT_USAGE_UNKNOWN_CONTACT",
+        message: `${usage.contactId} is referenced by support usage but does not exist.`,
+      });
+    }
+    if (exactSupportUsageKeys.has(exactKey)) {
+      violations.push({
+        code: "SUPPORT_USAGE_DUPLICATE",
+        message: `${usage.unitId} has duplicate support usage for ${usage.contactId}.`,
+        entityIds: [usage.unitId],
+      });
+    }
+    if (
+      supportUsageKeys.has(key) &&
+      !unit?.traits.includes("multiple_support")
+    ) {
+      violations.push({
+        code: "SUPPORT_USED_MULTIPLE_TIMES",
+        message: `${usage.unitId} supports multiple contacts in impulse ${usage.impulse}.`,
+        entityIds: [usage.unitId],
+      });
+    }
+    supportUsageKeys.add(key);
+    exactSupportUsageKeys.add(exactKey);
+  }
+
+  const supportedReserveTriggers = new Set<string>(
+    SUPPORTED_RESERVE_TRIGGER_CONDITIONS,
+  );
+  const supportedReactions = new Set<string>(
+    SUPPORTED_REACTION_CONDITIONS,
+  );
+  for (const plan of Object.values(state.plans)) {
+    for (const order of plan.orders) {
+      if (
+        order.reserveData?.triggerConditions.some(
+          (condition) => !supportedReserveTriggers.has(condition),
+        )
+      ) {
+        violations.push({
+          code: "ORDER_UNSUPPORTED_RESERVE_TRIGGER",
+          message: `${order.id} contains an unsupported reserve trigger.`,
+          entityIds: order.entityIds,
+        });
+      }
+    }
+    for (const reaction of plan.reactions) {
+      if (!supportedReactions.has(reaction.condition)) {
+        violations.push({
+          code: "REACTION_UNSUPPORTED_CONDITION",
+          message: `${reaction.id} contains an unsupported condition.`,
+          entityIds: reaction.entityIds,
+        });
+      }
     }
   }
 

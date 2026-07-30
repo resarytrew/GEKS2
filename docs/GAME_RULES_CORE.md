@@ -1,5 +1,9 @@
 # Правила ядра
 
+В v0.4.1 только валидированный шаг движения может создать контакт. Участники,
+поддержка и резерв разделены по атакующей и обороняющейся сторонам. Резерв после
+ввода становится участником, но не поддержкой одновременно.
+
 v0.4 uses fractional impulse movement, fuel and ammunition expenditure,
 multi-hex retreats, defensive posture, reserves, engineer work and one canonical
 CRT shared by legacy debug and WEGO combat.
@@ -62,3 +66,17 @@ Preview и resolution используют один `CombatModel`: силы, м�
 Исторические сроки используют кривую: более раннее достижение может дать
 бонус, опоздание уменьшает награду до установленного минимума. Финальные
 цели сохранения проверяются при завершении сценария.
+
+## Final hardening v0.4.1
+
+Текущая конфигурация содержит шесть импульсов; количество и последний импульс
+определяются из `EXECUTION_IMPULSES`, а не отдельным числом в engine или UI.
+
+Подрывная реакция получает только validated crossing attempt. Если после
+подрыва существует заранее проверенная `route_blocked` reaction, весь fallback
+повторно валидируется и применяется атомарно.
+
+Authoritative reserve triggers — только `friendly_contact` и
+`enemy_breakthrough`. `friendly_retreat`, `meeting_engagement` и
+`objective_threatened` запланированы для будущей версии и не входят в active
+domain model.

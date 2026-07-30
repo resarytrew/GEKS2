@@ -35,6 +35,7 @@ import {
   offensiveStrength,
   predictCombat,
   recomputeCommand,
+  effectiveMaxCommandPoints,
   recomputeSupply,
   resolveCombatCell,
   retreatPath,
@@ -589,7 +590,7 @@ function applyCard(s: GameState, cmd: GameCommand, events: GameEvent[]): void {
         const hq = s.headquarters[targets[0]];
         if (hq) {
           const value = eff.value ?? 2;
-          hq.commandPoints += value;
+          const startsAtTurn = s.turn + 1;
           s.temporaryCommandEffects.push({
             id: `command-effect:${cardId}:${hq.id}`,
             targetHqId: hq.id,
@@ -597,8 +598,9 @@ function applyCard(s: GameState, cmd: GameCommand, events: GameEvent[]): void {
             initiativeModifier: value,
             withdrawalDelayModifier:
               def.defId === "sov-directive3" ? 1 : undefined,
-            startsAtTurn: s.turn,
-            expiresAfterTurn: s.turn + (eff.durationTurns ?? 1) - 1,
+            startsAtTurn,
+            expiresAfterTurn:
+              startsAtTurn + (eff.durationTurns ?? 1) - 1,
           });
         }
         break;
@@ -734,7 +736,7 @@ function enterPhase(s: GameState, phase: GamePhase, events: GameEvent[]): void {
     // Refresh command points and command state for the new day's planning.
     for (const id in s.headquarters) {
       const hq = s.headquarters[id];
-      hq.commandPoints = hq.maxCommandPoints;
+      hq.commandPoints = effectiveMaxCommandPoints(s, hq);
       hq.movedThisTurn = false;
     }
     recomputeCommand(s);
@@ -816,6 +818,7 @@ function advancePhase(s: GameState, events: GameEvent[]): void {
     s.turn += 1;
     s.date = dateForTurn(s.turn);
     events.push({ type: "TURN_ADVANCED", turn: s.turn, date: s.date });
+    s.turnStartedAtEventIndex = s.eventLog.length + events.length - 1;
     if (s.turn >= 5) {
       const initiativeRoll = roll(s.seed, s.rngCursor);
       s.rngCursor = initiativeRoll.cursor;
