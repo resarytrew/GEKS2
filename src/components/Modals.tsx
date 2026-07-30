@@ -6,7 +6,8 @@ import { EVENTS, SCENARIO } from "@/scenarios/baltic-1941/scenario";
 import { SIDE_SHORT, ordinalTurn } from "@/lib/labels";
 import type { GameEvent } from "@/engine/types";
 import { Icon } from "@/components/Icon";
-import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
+import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/engine/presentation";
+import { sanitizeStateForSide } from "@/engine/wego";
 
 export default function Modals() {
   const openPanel = useGame((s) => s.openPanel);
@@ -48,7 +49,8 @@ function Report() {
   const state = useGame((s) => s.state)!;
   const dispatch = useGame((s) => s.dispatch);
   if (state.phase === "after_action" && state.afterActionReport) {
-    const report = state.afterActionReport;
+    const report = sanitizeStateForSide(state, state.activeSide).afterActionReport;
+    if (!report) return null;
     return (
       <>
         <Header

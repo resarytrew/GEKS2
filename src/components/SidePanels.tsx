@@ -5,7 +5,7 @@ import { useGame, unitsAt } from "@/store/gameStore";
 import { COMMANDERS, SOURCES } from "@/scenarios/baltic-1941/scenario";
 import OrderPlanningPanel from "@/components/OrderPlanningPanel";
 import ExecutionPanel from "@/components/ExecutionPanel";
-import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/lib/orderLabels";
+import { ORDER_STATUS_LABELS, ORDER_TYPE_LABELS } from "@/engine/presentation";
 import { SupplyMark } from "@/components/SupplyMark";
 import type { OperationalTab } from "@/lib/operationalSheet";
 import {
